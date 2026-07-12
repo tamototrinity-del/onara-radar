@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>屁音キャラ診断 — 試作v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #f7f5f0;
+    font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    color: #1a1a1a;
+  }
+
+  header { text-align: center; margin-bottom: 20px; }
+  .label-jp { font-size: 11px; letter-spacing: 0.15em; color: #888; margin-bottom: 4px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.05em; }
+
+  /* ステータス表示 */
+  .status-bar {
+    width: 100%;
+    max-width: 360px;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: all 0.3s;
+  }
+  .status-idle    { background: #e8e4de; color: #666; }
+  .status-measure { background: #fff3cd; color: #856404; }
+  .status-wait    { background: #d1ecf1; color: #0c5460; }
+  .status-rec     { background: #f8d7da; color: #721c24; animation: pulse 0.8s infinite; }
+  .status-done    { background: #d4edda; color: #155724; }
+  .status-error   { background: #f8d7da; color: #721c24; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* ボタン */
+  .btn {
+    width: 100%;
+    max-width: 360px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .btn-start { background: #2a2a2a; color: #fff; }
+  .btn-start:active { transform: scale(0.97); }
+  .btn-reset { background: #e8e4de; color: #444; font-size: 13px; padding: 10px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* レベルメーター */
+  .level-wrap {
+    width: 100%;
+    max-width: 360px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .level-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .level-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .level-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: #2a2a2a;
+    width: 0%;
+    transition: width 0.05s;
+  }
+
+  /* キャラ */
+  .char-stage {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+  }
+
+  .note-key { display: inline-block; font-size: 28px; font-weight: 800; color: #2a2a2a; }
+  .note-zodiac { font-size: 13px; color: #666; margin-bottom: 16px; text-align: center; }
+
+  /* レーダー */
+  .radar-wrap { width: 200px; height: 200px; margin: 0 auto 20px; }
+
+  /* 諸元 */
+  .specs {
+    width: 100%;
+    max-width: 360px;
+    border: 1px solid #e0ddd8;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    display: none;
+  }
+  .specs-title { background: #2a2a2a; color: #fff; font-size: 11px; letter-spacing: 0.12em; padding: 8px 14px; }
+  .spec-row { display: flex; justify-content: space-between; padding: 8px 14px; font-size: 12px; border-bottom: 1px solid #f0ede8; }
+  .spec-row:last-child { border-bottom: none; }
+  .spec-key { color: #666; }
+  .spec-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .invalid-msg {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    color: #a00;
+    font-size: 13px;
+    padding: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="label-jp">屁音キャラクター診断 試作v2</div>
+  <h1>おならレーダー</h1>
+</header>
+
+<div class="status-bar status-idle" id="status">マイクボタンを押して開始</div>
+
+<button class="btn btn-start" id="btn-start">🎙 診断開始</button>
+
+<div class="level-wrap" id="level-wrap">
+  <div class="level-label">入力レベル</div>
+  <div class="level-bar-bg"><div class="level-bar-fill" id="level-fill"></div></div>
+</div>
+
+<div class="char-stage">
+  <svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div class="note-key" id="note-display">—</div>
+<div class="note-zodiac" id="zodiac-display">待機中</div>
+
+<div class="radar-wrap">
+  <canvas id="radar" width="200" height="200"></canvas>
+</div>
+
+<div class="invalid-msg" id="invalid-msg">⚠ 有効な音が検出されませんでした。もう一度お試しください。</div>
+
+<div class="specs" id="specs">
+  <div class="specs-title">診断諸元</div>
+  <div class="spec-row"><span class="spec-key">音階・干支</span><span class="spec-val" id="d-note">—</span></div>
+  <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="d-size">—</span></div>
+  <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="d-length">—</span></div>
+  <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="d-wet">—</span></div>
+  <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="d-heavy">—</span></div>
+  <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="d-sharp">—</span></div>
+  <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="d-stable">—</span></div>
+</div>
+
+<button class="btn btn-dex-register" id="btn-dex-register" style="display:none; background:#3a6a4a; color:#fff; margin-top:12px;">📖 図鑑に登録</button>
+<button class="btn btn-reset" id="btn-reset" style="margin-top:10px; display:none;">もう一度</button>
+
+<div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
+
+<!-- 図鑑への導線 -->
+<button id="btn-dex-open" class="dex-fab">📖 図鑑</button>
+
+<style>
+  .dex-fab { position:fixed; top:12px; right:12px; z-index:20; background:#2a2a2a; color:#fff; border:none;
+    border-radius:20px; padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+  .overlay { position:fixed; inset:0; z-index:30; background:#f7f5f0; overflow-y:auto; display:none; }
+  .overlay.show { display:block; }
+  .ov-head { position:sticky; top:0; background:#2a2a2a; color:#fff; display:flex; align-items:center;
+    justify-content:space-between; padding:12px 16px; z-index:2; }
+  .ov-head .ov-title { font-size:16px; font-weight:700; }
+  .ov-back { background:transparent; border:none; color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
+  .ov-count { font-size:12px; color:#ccc; }
+  .dex-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:16px; max-width:520px; margin:0 auto; }
+  .dex-cell { background:#fff; border:1px solid #e0ddd8; border-radius:12px; padding:6px 4px 8px; text-align:center; position:relative; }
+  .dex-cell.filled { cursor:pointer; }
+  .dex-cell svg { display:block; margin:0 auto; width:100%; height:auto; }
+  .dex-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:112px; }
+  .dex-empty .sil { width:64px; height:64px; border-radius:50%; background:#e4e0da; }
+  .dex-zod { font-size:13px; font-weight:700; margin-top:2px; }
+  .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
+  .dex-empty-lbl { font-size:11px; color:#aaa; }
+  /* 詳細 */
+  .detail-body { max-width:380px; margin:0 auto; padding:16px; text-align:center; }
+  .detail-body .char-stage { width:210px; height:210px; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; }
+  .detail-date { font-size:12px; color:#888; margin-top:8px; }
+  .detail-type-badge { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 10px; border-radius:10px; margin-bottom:6px; }
+  /* 入れ替え確認 */
+  #swap-overlay { z-index:40; background:rgba(20,18,16,0.55); display:none; align-items:center; justify-content:center; }
+  #swap-overlay.show { display:flex; }
+  .swap-box { background:#f7f5f0; border-radius:14px; padding:18px 16px; max-width:360px; width:90%; text-align:center; }
+  .swap-title { font-size:14px; font-weight:700; margin-bottom:12px; }
+  .swap-compare { display:flex; align-items:center; justify-content:center; gap:6px; }
+  .swap-side { flex:1; }
+  .swap-side svg { width:110px; height:110px; }
+  .swap-lbl { font-size:11px; color:#888; }
+  .swap-info { font-size:11px; color:#555; }
+  .swap-arrow { font-size:20px; color:#999; }
+  .swap-btns { display:flex; gap:10px; margin-top:14px; }
+  .swap-btns .btn { margin:0; flex:1; padding:12px; }
+</style>
+
+<!-- 図鑑グリッド -->
+<div class="overlay" id="dex-overlay">
+  <div class="ov-head"><button class="ov-back" id="dex-close">✕ 閉じる</button><div class="ov-title">図鑑</div><div class="ov-count" id="dex-count"></div></div>
+  <div class="dex-grid" id="dex-grid"></div>
+</div>
+
+<!-- 個体詳細 -->
+<div class="overlay" id="detail-overlay">
+  <div class="ov-head"><button class="ov-back" id="detail-close">‹ 図鑑</button><div class="ov-title" id="detail-title">個体詳細</div><div></div></div>
+  <div class="detail-body">
+    <div class="char-stage"><svg id="detail-svg" width="210" height="210" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div id="detail-typebadge" class="detail-type-badge"></div>
+    <div class="note-key" id="detail-note"></div>
+    <div class="note-zodiac" id="detail-zodiac"></div>
+    <div class="radar-wrap" style="margin:8px auto;"><canvas id="detail-radar" width="200" height="200"></canvas></div>
+    <div class="specs" style="display:block;" id="detail-specs">
+      <div class="specs-title">診断諸元</div>
+      <div class="spec-row"><span class="spec-key">音階・干支</span><span class="spec-val" id="dd-note">—</span></div>
+      <div class="spec-row"><span class="spec-key">タイプ</span><span class="spec-val" id="dd-type">—</span></div>
+      <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="dd-size">—</span></div>
+      <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="dd-length">—</span></div>
+      <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="dd-wet">—</span></div>
+      <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="dd-heavy">—</span></div>
+      <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="dd-sharp">—</span></div>
+      <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="dd-stable">—</span></div>
+    </div>
+    <div class="detail-date" id="detail-date"></div>
+  </div>
+</div>
+
+<!-- 入れ替え確認 -->
+<div class="overlay" id="swap-overlay">
+  <div class="swap-box">
+    <div class="swap-title" id="swap-title">このスロットには既に住人がいます。入れ替えますか？</div>
+    <div class="swap-compare">
+      <div class="swap-side"><div class="swap-lbl">現在の住人</div><svg id="swap-cur" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-cur-info"></div></div>
+      <div class="swap-arrow">→</div>
+      <div class="swap-side"><div class="swap-lbl">新しい住人</div><svg id="swap-new" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-new-info"></div></div>
+    </div>
+    <div class="swap-btns"><button class="btn" id="swap-yes" style="background:#3a6a4a;color:#fff;">入れ替える</button><button class="btn btn-reset" id="swap-no">やめる</button></div>
+  </div>
+</div>
+
+<script src="chara.js"></script>
+<script>window.ZTRACE = window.ZTRACE || {};</script>
+<script src="path-util.js"></script>
+<script src="chara-trace.js"></script>
+<script>
+const NOTES    = ['A','A#','B','C','C#','D','D#','E','F','F#','G','G#'];
+const ZODIACS  = ['子（ね）','丑（うし）','寅（とら）','卯（う）','辰（たつ）','巳（み）','午（うま）','未（ひつじ）','申（さる）','酉（とり）','戌（いぬ）','亥（い）'];
+
+// 有効範囲
+const VALID_FREQ_MIN = 50;
+const VALID_FREQ_MAX = 200;
+const VALID_DUR_MIN  = 0.1;
+const VALID_DUR_MAX  = 10.0;   // 足切り上限（スコア正規化とは別）
+const NOISE_MARGIN_DB = 12;    // ノイズフロア+これ以上で本体（検出のみ。大きさスコアには使わない）
+
+// ===== analyze-batch.js と一致させた確定チューニング値 =====
+// 大きさ：絶対dB(dBFS)。環境ノイズは差し引かない。-38/-12 も試せるよう定数化。
+const SIZE_DB_MIN = -50;
+const SIZE_DB_MAX = -10;
+// 長さ：足切り10sとは別に 0.1〜LEN_SCORE_MAX_SEC で正規化
+const LEN_SCORE_MAX_SEC = 2.0;
+// 安定感：RMS窓0.03s、CVを 0.3〜2.7 で正規化
+const STABLE_WIN_SEC = 0.03;
+const STABLE_CV_MIN  = 0.3;
+const STABLE_CV_MAX  = 2.7;
+// キレ：log10(riseRate) を 1.0〜4.0 で正規化
+const SHARP_LOG_MIN = 1.0;
+const SHARP_LOG_MAX = 4.0;
+const RISE_CAP = 1e6;
+// 音程：YIN法
+const YIN_F0_MIN = 50;
+const YIN_F0_MAX = 350;
+const YIN_W = 2048;
+const YIN_THRESHOLD = 0.15;
+// period(周期性)→タイプ判定の3分割（暫定閾値・表示はしない。内部保持＋記録用）
+const PERIOD_TYPE_HI = 0.55;  // これ以上→王子（実データ24件の3分位で均等化）
+const PERIOD_TYPE_LO = 0.33;  // これ未満→野良（間→王女）
+
+let audioCtx, analyser, source, stream;
+let noiseFloorDb = -60;
+let state = 'idle'; // idle | measuring | waiting | recording | done
+
+const btnStart  = document.getElementById('btn-start');
+const btnReset  = document.getElementById('btn-reset');
+const statusEl  = document.getElementById('status');
+const levelWrap = document.getElementById('level-wrap');
+const levelFill = document.getElementById('level-fill');
+
+function setStatus(msg, cls) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status-bar ' + cls;
+}
+
+// RMS→dB
+function rmsToDb(rms) {
+  return rms < 1e-9 ? -100 : 20 * Math.log10(rms);
+}
+
+// FFTデータから基音検出（50〜200Hz）
+function detectFundamental(fftData, sampleRate, fftSize) {
+  const binHz = sampleRate / fftSize;
+  const minBin = Math.floor(VALID_FREQ_MIN / binHz);
+  const maxBin = Math.ceil(VALID_FREQ_MAX / binHz);
+  let maxVal = -Infinity, maxIdx = minBin;
+  for (let i = minBin; i <= Math.min(maxBin, fftData.length - 1); i++) {
+    if (fftData[i] > maxVal) { maxVal = fftData[i]; maxIdx = i; }
+  }
+  return maxIdx * binHz;
+}
+
+// 50〜200Hz帯の低周波エネルギー（FFTのdB値→線形和）。代表フレーム選定用。
+function lowBandEnergy(fftData, sampleRate, fftSize) {
+  const binHz = sampleRate / fftSize;
+  const minBin = Math.floor(VALID_FREQ_MIN / binHz);
+  const maxBin = Math.ceil(VALID_FREQ_MAX / binHz);
+  let e = 0;
+  for (let i = minBin; i <= Math.min(maxBin, fftData.length - 1); i++) {
+    e += Math.pow(10, fftData[i] / 20);
+  }
+  return e;
+}
+
+// Hz→音名インデックス（平均律）
+function hzToNoteIndex(hz) {
+  // A4=440Hz基準
+  const semitones = Math.round(12 * Math.log2(hz / 440));
+  return ((semitones % 12) + 12) % 12;
+}
+
+// Hz→Hi/Low判定（同音名の中でオクターブ位置）
+function hzToHiLow(hz) {
+  // 50-100Hz → Low, 100-150Hz → Mid, 150-200Hz → Hi
+  if (hz < 100) return -1;
+  if (hz > 150) return 1;
+  return 0;
+}
+
+// YIN法によるF0推定（波形の周期性から基音を直接推定。倍音でなく知覚ピッチを返す）
+// centerSample を中心に窓を取り、差分関数→CMND→絶対閾値→放物線補間。
+// 返り値: { f0, period }  period=1-aperiodicity（1に近いほど明瞭なピッチ）
+function yinF0(samples, centerSample, sampleRate) {
+  const tauMax = Math.floor(sampleRate / YIN_F0_MIN);
+  const tauMin = Math.max(2, Math.floor(sampleRate / YIN_F0_MAX));
+  const need = YIN_W + tauMax;
+  let start = Math.round(centerSample - need / 2);
+  if (start < 0) start = 0;
+  if (start + need > samples.length) start = Math.max(0, samples.length - need);
+  const N = Math.min(need, samples.length - start);
+  if (N < YIN_W + tauMin + 2) return null;
+  const buf = samples.subarray ? samples.subarray(start, start + N) : samples.slice(start, start + N);
+  const W = YIN_W;
+  const tMax = Math.min(tauMax, N - W - 1);
+  if (tMax <= tauMin) return null;
+
+  const d = new Float64Array(tMax + 1);
+  for (let tau = 1; tau <= tMax; tau++) {
+    let sum = 0;
+    for (let j = 0; j < W; j++) { const diff = buf[j] - buf[j + tau]; sum += diff * diff; }
+    d[tau] = sum;
+  }
+  const dp = new Float64Array(tMax + 1);
+  dp[0] = 1; let running = 0;
+  for (let tau = 1; tau <= tMax; tau++) { running += d[tau]; dp[tau] = running > 0 ? d[tau] * tau / running : 1; }
+
+  let tau = -1;
+  for (let t = tauMin; t <= tMax; t++) {
+    if (dp[t] < YIN_THRESHOLD) {
+      while (t + 1 <= tMax && dp[t + 1] < dp[t]) t++;
+      tau = t; break;
+    }
+  }
+  if (tau === -1) {
+    let best = tauMin, bv = Infinity;
+    for (let t = tauMin; t <= tMax; t++) if (dp[t] < bv) { bv = dp[t]; best = t; }
+    tau = best;
+  }
+  let betterTau = tau;
+  if (tau > tauMin && tau < tMax) {
+    const s0 = dp[tau - 1], s1 = dp[tau], s2 = dp[tau + 1];
+    const denom = s0 - 2 * s1 + s2;
+    if (denom !== 0) betterTau = tau + 0.5 * (s0 - s2) / denom;
+  }
+  return { f0: sampleRate / betterTau, period: Math.max(0, Math.min(1, 1 - dp[tau])) };
+}
+
+// period(周期性)→タイプ（暫定・表示しない内部データ）
+function periodType(p) {
+  return p >= PERIOD_TYPE_HI ? '王子' : p >= PERIOD_TYPE_LO ? '王女' : '野良';
+}
+
+// 区間RMS
+function rmsRange(samples, from, to) {
+  let s = 0;
+  for (let i = from; i < to; i++) s += samples[i] * samples[i];
+  return Math.sqrt(s / Math.max(1, to - from));
+}
+
+// エンベロープ解析（analyze-batch.js と同一）。
+// 本体検出は 10ms RMSエンベロープ × ノイズフロア+12dB。環境音のノイズ山を除外する。
+function analyzeEnvelope(samples, sampleRate, noiseFloor) {
+  const threshold = noiseFloor * Math.pow(10, NOISE_MARGIN_DB / 20);
+  const win = Math.max(1, Math.floor(sampleRate * 0.01)); // 10ms
+  const hop = Math.max(1, Math.floor(win / 2));
+  let onsetIdx = -1, offsetIdx = -1;
+  for (let p = 0; p + win <= samples.length; p += hop) {
+    if (rmsRange(samples, p, p + win) > threshold) {
+      if (onsetIdx < 0) onsetIdx = p;
+      offsetIdx = p + win;
+    }
+  }
+  if (onsetIdx < 0 || offsetIdx <= onsetIdx) return null;
+  const duration = (offsetIdx - onsetIdx) / sampleRate;
+
+  // キレのよさ：立ち上がりの急峻さ（onset前後20msのエネルギー比率）
+  const riseWindow = Math.floor(sampleRate * 0.02);
+  let riseRate = 0;
+  if (onsetIdx + riseWindow < samples.length) {
+    let before = 0, after = 0;
+    for (let i = Math.max(0, onsetIdx - riseWindow); i < onsetIdx; i++) before += samples[i] * samples[i];
+    before /= riseWindow;
+    for (let i = onsetIdx; i < onsetIdx + riseWindow; i++) after += samples[i] * samples[i];
+    after /= riseWindow;
+    riseRate = before > 0 ? Math.min(after / before, RISE_CAP) : 50;
+  }
+
+  // 湿り気：末尾20%のエネルギー比率
+  let totalE = 0, tailE = 0;
+  const tailStart = onsetIdx + Math.floor((offsetIdx - onsetIdx + 1) * 0.8);
+  for (let i = onsetIdx; i <= offsetIdx; i++) {
+    const e = samples[i] * samples[i];
+    totalE += e;
+    if (i >= tailStart) tailE += e;
+  }
+  const wetRatio = totalE > 0 ? tailE / totalE : 0;
+
+  return { duration, riseRate, wetRatio, onsetIdx, offsetIdx };
+}
+
+// スコア計算（analyze-batch.js の確定ロジックと一致）
+// peakSampleIndex: 録音全体で低周波エネルギーが最大だった瞬間のバッファ位置（YINの窓中心）
+function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
+  const samples = recordedBuffer;
+  const envelope = analyzeEnvelope(samples, sampleRate, Math.pow(10, noiseFloorDb / 20));
+  if (!envelope) return null;
+
+  const { duration, riseRate, wetRatio, onsetIdx, offsetIdx } = envelope;
+  if (duration < VALID_DUR_MIN || duration > VALID_DUR_MAX) return null;
+
+  // 大きさ（絶対dB評価・環境非依存）
+  const rms = rmsRange(samples, onsetIdx, offsetIdx + 1);
+  const db  = rmsToDb(rms);
+  const sizeScore = Math.max(0, Math.min(100, (db - SIZE_DB_MIN) / (SIZE_DB_MAX - SIZE_DB_MIN) * 100));
+
+  // 長さ（0.1〜LEN_SCORE_MAX_SEC で正規化。足切りとは別）
+  const lengthScore = Math.max(0, Math.min(100, (duration - VALID_DUR_MIN) / (LEN_SCORE_MAX_SEC - VALID_DUR_MIN) * 100));
+
+  // 湿り気（末尾エネルギー比率 → 0〜100）
+  const wetScore = Math.max(0, Math.min(100, wetRatio / 0.35 * 100));
+
+  // 重厚感（代表フレームの低域/全域比。AnalyserNodeのdB値→線形和）
+  const fftSize = fftSnapshot.length * 2;
+  const binHz = sampleRate / fftSize;
+  const lowMaxBin = Math.ceil(100 / binHz);
+  const highMaxBin = Math.ceil(200 / binHz);
+  let lowE = 0, highE = 0;
+  for (let i = Math.floor(50/binHz); i <= Math.min(lowMaxBin, fftSnapshot.length-1); i++) {
+    lowE += Math.pow(10, fftSnapshot[i] / 20);
+  }
+  for (let i = lowMaxBin; i <= Math.min(highMaxBin, fftSnapshot.length-1); i++) {
+    highE += Math.pow(10, fftSnapshot[i] / 20);
+  }
+  const totalBandE = lowE + highE;
+  const heavyScore = totalBandE > 0 ? Math.max(0, Math.min(100, (lowE / totalBandE) * 100)) : 50;
+
+  // キレ（log10(riseRate) を SHARP_LOG_MIN〜MAX で正規化）
+  const sharpScore = Math.max(0, Math.min(100,
+    (Math.log10(Math.max(riseRate, 1)) - SHARP_LOG_MIN) / (SHARP_LOG_MAX - SHARP_LOG_MIN) * 100));
+
+  // 安定感（STABLE_WIN_SEC窓RMSのCVを STABLE_CV_MIN〜MAX で正規化）
+  const winLen = Math.floor(sampleRate * STABLE_WIN_SEC);
+  const rmsList = [];
+  for (let i = onsetIdx; i < offsetIdx - winLen; i += winLen) rmsList.push(rmsRange(samples, i, i + winLen));
+  let stableScore = 50;
+  if (rmsList.length > 1) {
+    const mean = rmsList.reduce((s, x) => s + x, 0) / rmsList.length;
+    const std  = Math.sqrt(rmsList.reduce((s, x) => s + (x - mean) ** 2, 0) / rmsList.length);
+    const cv   = mean > 0 ? std / mean : 1;
+    stableScore = Math.max(0, Math.min(100, (STABLE_CV_MAX - cv) / (STABLE_CV_MAX - STABLE_CV_MIN) * 100));
+  }
+
+  // 音程：YINでF0推定（倍音でなく知覚ピッチ）。失敗時は代表フレームのピークにフォールバック。
+  const center = (peakSampleIndex != null ? peakSampleIndex : (onsetIdx + offsetIdx) / 2);
+  const yin = yinF0(samples, center, sampleRate);
+  let fundamentalHz, period;
+  if (yin && yin.f0 > 0) { fundamentalHz = yin.f0; period = yin.period; }
+  else { fundamentalHz = detectFundamental(fftSnapshot, sampleRate, fftSize); period = 0; }
+
+  return {
+    size:   Math.round(sizeScore),
+    length: Math.round(lengthScore),
+    wet:    Math.round(wetScore),
+    heavy:  Math.round(heavyScore),
+    sharp:  Math.round(sharpScore),
+    stable: Math.round(stableScore),
+    durationSec: duration,
+    dbVal: db,
+    noteIdx: hzToNoteIndex(fundamentalHz),
+    hilow: hzToHiLow(fundamentalHz),
+    hz: fundamentalHz,
+    period: +period.toFixed(2),
+    type: periodType(period),
+  };
+}
+
+// ---- メイン処理 ----
+btnStart.addEventListener('click', async () => {
+  if (state !== 'idle') return;
+  btnStart.disabled = true;
+  document.getElementById('specs').style.display = 'none';
+  document.getElementById('invalid-msg').style.display = 'none';
+  document.getElementById('btn-dex-register').style.display = 'none';
+  btnReset.style.display = 'none';
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+
+    const fftData  = new Float32Array(analyser.frequencyBinCount);
+    const timeData = new Float32Array(analyser.fftSize);
+
+    // ---- Phase 1: ノイズフロア計測 ----
+    state = 'measuring';
+    setStatus('環境ノイズを計測中… 静かにお待ちください', 'status-measure');
+    levelWrap.style.display = 'block';
+
+    const noiseRMSList = [];
+    const measureStart = Date.now();
+    await new Promise(resolve => {
+      const measureLoop = () => {
+        analyser.getFloatTimeDomainData(timeData);
+        const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
+        noiseRMSList.push(rms);
+        const pct = Math.min(100, ((Date.now() - measureStart) / 2000) * 100);
+        levelFill.style.width = pct + '%';
+        if (Date.now() - measureStart < 2000) requestAnimationFrame(measureLoop);
+        else resolve();
+      };
+      requestAnimationFrame(measureLoop);
+    });
+
+    const noiseRMS = noiseRMSList.reduce((s, x) => s + x, 0) / noiseRMSList.length;
+    noiseFloorDb = rmsToDb(noiseRMS);
+    const threshold = noiseRMS * Math.pow(10, NOISE_MARGIN_DB / 20);
+
+    // ---- Phase 2: 待機 ----
+    state = 'waiting';
+    setStatus('準備完了 — いつでもどうぞ 🎯', 'status-wait');
+    levelFill.style.width = '0%';
+    levelFill.style.background = '#2a9d8f';
+
+    // 録音バッファ
+    const recordedSamples = [];
+    let isRecording = false;
+    let silenceFrames = 0;
+    const SILENCE_FRAMES = 20; // 無音継続フレーム数で終了
+    let fftSnapshot = null;
+    let peakSampleIndex = 0;       // 低周波エネルギー最大の瞬間のバッファ位置（YIN窓中心）
+    let maxLowEnergy = -Infinity;  // 録音全体での低周波エネルギー最大値（代表フレーム選定用）
+    let startTime = null;
+
+    await new Promise((resolve, reject) => {
+      const loop = () => {
+        if (state === 'idle') { resolve(); return; }
+
+        analyser.getFloatTimeDomainData(timeData);
+        analyser.getFloatFrequencyData(fftData);
+
+        const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
+        const pct = Math.min(100, (rms / threshold) * 60);
+        levelFill.style.width = pct + '%';
+
+        if (!isRecording) {
+          if (rms > threshold) {
+            // 検知
+            isRecording = true;
+            state = 'recording';
+            startTime = Date.now();
+            setStatus('● 録音中…', 'status-rec');
+            recordedSamples.push(...timeData);
+            // 代表フレーム（低周波エネルギー最大）の初期化
+            maxLowEnergy = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
+            fftSnapshot = fftData.slice();
+            peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
+          }
+        } else {
+          recordedSamples.push(...timeData);
+          // 録音全体で低周波エネルギーが最大の瞬間を代表フレームとして採用（基音・重厚感はここから確定）
+          const le = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
+          if (le > maxLowEnergy) {
+            maxLowEnergy = le;
+            fftSnapshot = fftData.slice();
+            peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
+          }
+          if (rms < threshold * 0.6) {
+            silenceFrames++;
+            if (silenceFrames > SILENCE_FRAMES) { resolve(); return; }
+          } else {
+            silenceFrames = 0;
+          }
+          // 上限10秒
+          if (Date.now() - startTime > 10000) { resolve(); return; }
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
+
+    state = 'done';
+    setStatus('解析中…', 'status-measure');
+
+    // クリーンアップ
+    stream.getTracks().forEach(t => t.stop());
+    levelWrap.style.display = 'none';
+
+    if (recordedSamples.length === 0) {
+      setStatus('音が検出されませんでした', 'status-error');
+      document.getElementById('invalid-msg').style.display = 'block';
+      btnReset.style.display = 'block';
+      state = 'idle';
+      btnStart.disabled = false;
+      return;
+    }
+
+    const scores = calcScores(
+      new Float32Array(recordedSamples),
+      audioCtx.sampleRate,
+      fftSnapshot || fftData,
+      peakSampleIndex
+    );
+
+    if (!scores) {
+      setStatus('有効な屁音が検出されませんでした', 'status-error');
+      document.getElementById('invalid-msg').style.display = 'block';
+      btnReset.style.display = 'block';
+      state = 'idle';
+      btnStart.disabled = false;
+      return;
+    }
+
+    // 表示
+    displayResult(scores);
+
+  } catch (e) {
+    setStatus('マイクへのアクセスが拒否されました', 'status-error');
+    btnStart.disabled = false;
+    state = 'idle';
+  }
+});
+
+btnReset.addEventListener('click', () => {
+  state = 'idle';
+  btnStart.disabled = false;
+  btnReset.style.display = 'none';
+  document.getElementById('btn-dex-register').style.display = 'none';
+  document.getElementById('specs').style.display = 'none';
+  document.getElementById('invalid-msg').style.display = 'none';
+  setStatus('マイクボタンを押して開始', 'status-idle');
+  document.getElementById('note-display').textContent = '—';
+  document.getElementById('zodiac-display').textContent = '待機中';
+  drawRadarEmpty();
+  drawMouseDefault();
+});
+
+function displayResult(s) {
+  const note   = NOTES[s.noteIdx];
+  const zodiac = ZODIACS[s.noteIdx];
+  const hilow  = s.hilow > 0 ? ' [Hi]' : s.hilow < 0 ? ' [Low]' : '';
+
+  document.getElementById('note-display').textContent = note + hilow;
+  document.getElementById('zodiac-display').textContent = zodiac;
+
+  document.getElementById('d-note').textContent   = note + hilow + ' / ' + zodiac;
+  document.getElementById('d-size').textContent   = s.dbVal.toFixed(1) + ' dB';
+  document.getElementById('d-length').textContent = s.durationSec.toFixed(2) + ' s';
+  document.getElementById('d-wet').textContent    = s.wet + ' %';
+  document.getElementById('d-heavy').textContent  = s.heavy + ' %';
+  document.getElementById('d-sharp').textContent  = s.sharp + ' pt';
+  document.getElementById('d-stable').textContent = s.stable + ' %';
+
+  document.getElementById('specs').style.display = 'block';
+  setStatus('診断完了', 'status-done');
+
+  drawRadar(s);
+  drawMouse(s);
+  lastScores = s;                                          // 図鑑登録用に保持
+  document.getElementById('btn-dex-register').style.display = 'block';
+  btnReset.style.display = 'block';
+  state = 'idle';
+  btnStart.disabled = false;
+
+  // チューニング用：数値のみサーバーCSVへ追記（音声は送らない）
+  logResult(s);
+}
+
+// 診断結果（数値のみ）をサーバーに記録
+function logResult(s) {
+  const logEl = document.getElementById('log-status');
+  const payload = {
+    note:      NOTES[s.noteIdx],
+    noteIdx:   s.noteIdx,
+    zodiac:    ZODIACS[s.noteIdx],
+    hilow:     s.hilow,
+    hz:        +s.hz.toFixed(1),
+    duration:  +s.durationSec.toFixed(3),
+    db:        +s.dbVal.toFixed(1),
+    noiseFloor: +noiseFloorDb.toFixed(1),
+    size:      s.size,
+    length:    s.length,
+    wet:       s.wet,
+    heavy:     s.heavy,
+    sharp:     s.sharp,
+    stable:    s.stable,
+    period:    s.period,   // 周期性（内部データ・結果画面には非表示）
+    type:      s.type,     // period由来のタイプ（暫定・非表示）
+    ua:        navigator.userAgent,
+  };
+  // 内部データはコンソールにも出す（periodやtypeの確認用）
+  console.log('[onara] result', payload);
+  // 母集団CSV記録は開発用サーバー(/api/log)のみ。公開ホスティングでは無い→静かに無視。
+  if (logEl) logEl.textContent = '';
+  fetch('/api/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(d => { if (logEl) logEl.textContent = d && d.ok ? '📝 記録しました' : ''; })
+    .catch(e => { if (logEl) logEl.textContent = ''; });
+}
+
+// ---- キャラ描画（トレース素材版。干支=noteIdx でデータを動的ロードして描画） ----
+const TRACE_NAMES = ['00_ne','01_ushi','02_tora','03_u','04_tatsu','05_mi','06_uma','07_hitsuji','08_saru','09_tori','10_inu','11_i'];
+function ensureSpecies(zi, cb) {
+  const key = TRACE_NAMES[zi];
+  if (window.ZTRACE && window.ZTRACE[key]) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'assets/zodiac-trace/' + key + '.js';
+  s.onload = () => cb();
+  s.onerror = () => cb(new Error('trace data load failed: ' + key));
+  document.head.appendChild(s);
+}
+// 任意のsvg要素へキャラ描画（干支データ動的ロード込み）。図鑑グリッド/詳細/入替でも使う。
+function renderCharaInto(svg, v, uid) {
+  const zi = (v.noteIdx != null) ? v.noteIdx : 0;
+  ensureSpecies(zi, function (err) {
+    if (!err && window.CharaTrace) {
+      const out = CharaTrace.charaTraceSVG(v, zi, uid || 'c');
+      if (out) { svg.innerHTML = out; return; }
+    }
+    if (window.Chara) svg.innerHTML = Chara.charaSVG(v, zi, uid || 'c');
+  });
+}
+function drawMouse(v) {
+  renderCharaInto(document.getElementById('mouse-svg'), v, 'live');
+}
+
+function drawMouseDefault() {
+  const svg = document.getElementById('mouse-svg');
+  svg.innerHTML = '';
+}
+
+// ---- レーダーチャート ----
+function drawRadar(v) { drawRadarInto(document.getElementById('radar'), v); }
+function drawRadarInto(canvas, v) {
+  const ctx = canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, R=W*0.38;
+  ctx.clearRect(0,0,W,H);
+  const labels = ['大きさ','長さ','湿り気','重厚感','キレ','安定感'];
+  const values = [v.size,v.length,v.wet,v.heavy,v.sharp,v.stable];
+  const n=6;
+  const angle = i => Math.PI*2/n*i - Math.PI/2;
+  const pt = (i,r) => ({ x: cx+r*Math.cos(angle(i)), y: cy+r*Math.sin(angle(i)) });
+  for(let g=1;g<=4;g++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){const p=pt(i,R*g/4);i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);}
+    ctx.closePath(); ctx.strokeStyle='#ddd'; ctx.lineWidth=1; ctx.stroke();
+  }
+  for(let i=0;i<n;i++){const p=pt(i,R);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#ddd';ctx.lineWidth=1;ctx.stroke();}
+  ctx.beginPath();
+  for(let i=0;i<n;i++){const p=pt(i,R*values[i]/100);i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);}
+  ctx.closePath(); ctx.fillStyle='rgba(42,42,42,0.15)'; ctx.fill();
+  ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=2; ctx.stroke();
+  for(let i=0;i<n;i++){const p=pt(i,R*values[i]/100);ctx.beginPath();ctx.arc(p.x,p.y,3.5,0,Math.PI*2);ctx.fillStyle='#2a2a2a';ctx.fill();}
+  ctx.fillStyle='#555'; ctx.font='10px "Hiragino Sans",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<n;i++){const p=pt(i,R+18);ctx.fillText(labels[i],p.x,p.y);}
+}
+
+function drawRadarEmpty() {
+  const canvas = document.getElementById('radar');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+drawRadarEmpty();
+
+// ===== 図鑑 =====
+const DEX_KEY = 'onara_dex_v1';
+let lastScores = null;
+const DEX_TYPECOL = { '王子':'#4f79c8', '王女':'#d46a94', '野良':'#7a8a7a' };
+
+function dexLoad() {
+  try { const a = JSON.parse(localStorage.getItem(DEX_KEY)); if (Array.isArray(a) && a.length === 12) return a; } catch (e) {}
+  return new Array(12).fill(null);
+}
+function dexSave(dex) { try { localStorage.setItem(DEX_KEY, JSON.stringify(dex)); } catch (e) {} }
+function scoreToEntry(s) {
+  return { size:s.size, length:s.length, wet:s.wet, heavy:s.heavy, sharp:s.sharp, stable:s.stable,
+    noteIdx:s.noteIdx, hilow:s.hilow, type:s.type, period:s.period, hz:+(s.hz||0),
+    note:NOTES[s.noteIdx], zodiac:ZODIACS[s.noteIdx], durationSec:s.durationSec, dbVal:s.dbVal, savedAt:Date.now() };
+}
+function fmtDate(ts){ const d=new Date(ts), p=n=>('0'+n).slice(-2); return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function hlStr(e){ return e.hilow>0?' [Hi]':e.hilow<0?' [Low]':''; }
+
+function refreshDexGrid() {
+  const dex = dexLoad(), grid = document.getElementById('dex-grid');
+  grid.innerHTML = ''; let filled = 0;
+  for (let i=0;i<12;i++){
+    const e = dex[i], cell = document.createElement('div');
+    cell.className = 'dex-cell' + (e?' filled':'');
+    if (e) {
+      filled++;
+      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ZODIACS[i]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
+      renderCharaInto(cell.querySelector('svg'), e, 'dex'+i);
+      cell.onclick = () => openDetail(i);
+    } else {
+      cell.innerHTML = `<div class="dex-empty"><div class="sil"></div></div><div class="dex-zod" style="color:#bbb">${ZODIACS[i]}</div><div class="dex-empty-lbl">未登録</div>`;
+    }
+    grid.appendChild(cell);
+  }
+  document.getElementById('dex-count').textContent = filled + ' / 12';
+}
+function openDex(){ refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
+function closeDex(){ document.getElementById('dex-overlay').classList.remove('show'); }
+
+function openDetail(i){
+  const e = dexLoad()[i]; if(!e) return;
+  document.getElementById('detail-title').textContent = ZODIACS[i];
+  renderCharaInto(document.getElementById('detail-svg'), e, 'detail');
+  drawRadarInto(document.getElementById('detail-radar'), e);
+  const badge = document.getElementById('detail-typebadge');
+  badge.textContent = e.type; badge.style.background = DEX_TYPECOL[e.type]||'#999';
+  document.getElementById('detail-note').textContent = e.note + hlStr(e);
+  document.getElementById('detail-zodiac').textContent = e.zodiac;
+  document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + e.zodiac;
+  document.getElementById('dd-type').textContent = e.type + '（周期性 ' + (e.period!=null?(+e.period).toFixed(2):'-') + '）';
+  document.getElementById('dd-size').textContent = e.dbVal!=null? (+e.dbVal).toFixed(1)+' dB' : (e.size+' %');
+  document.getElementById('dd-length').textContent = e.durationSec!=null? (+e.durationSec).toFixed(2)+' s' : (e.length+' %');
+  document.getElementById('dd-wet').textContent = e.wet + ' %';
+  document.getElementById('dd-heavy').textContent = e.heavy + ' %';
+  document.getElementById('dd-sharp').textContent = e.sharp + ' pt';
+  document.getElementById('dd-stable').textContent = e.stable + ' %';
+  document.getElementById('detail-date').textContent = '記録日 ' + fmtDate(e.savedAt);
+  document.getElementById('detail-overlay').classList.add('show');
+}
+function closeDetail(){ document.getElementById('detail-overlay').classList.remove('show'); }
+
+function registerCurrent(){
+  if(!lastScores){ return; }
+  const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('📖 図鑑に登録しました（'+ZODIACS[zi]+'）'); }
+  else { openSwap(zi, entry, dex[zi]); }
+}
+function flashReg(msg){ const el=document.getElementById('log-status'); if(el) el.textContent=msg; }
+
+let swapCtx = null;
+function openSwap(zi, newEntry, curEntry){
+  swapCtx = { zi, newEntry };
+  renderCharaInto(document.getElementById('swap-cur'), curEntry, 'swapc');
+  renderCharaInto(document.getElementById('swap-new'), newEntry, 'swapn');
+  document.getElementById('swap-cur-info').textContent = curEntry.type+' '+curEntry.note+hlStr(curEntry);
+  document.getElementById('swap-new-info').textContent = newEntry.type+' '+newEntry.note+hlStr(newEntry);
+  document.getElementById('swap-title').textContent = ZODIACS[zi]+'のスロットには既に住人がいます。入れ替えますか？';
+  document.getElementById('swap-overlay').classList.add('show');
+}
+function doSwap(yes){
+  document.getElementById('swap-overlay').classList.remove('show');
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('📖 入れ替えました（'+ZODIACS[swapCtx.zi]+'）'); }
+  swapCtx=null;
+}
+
+document.getElementById('btn-dex-open').addEventListener('click', openDex);
+document.getElementById('dex-close').addEventListener('click', closeDex);
+document.getElementById('detail-close').addEventListener('click', closeDetail);
+document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
+document.getElementById('swap-yes').addEventListener('click', ()=>doSwap(true));
+document.getElementById('swap-no').addEventListener('click', ()=>doSwap(false));
+</script>
+</body>
+</html>

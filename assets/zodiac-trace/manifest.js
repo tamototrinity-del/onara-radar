@@ -1,0 +1,1 @@
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.ZTRACE_MANIFEST=factory();})(typeof self!=='undefined'?self:this,function(){return ["00_ne","01_ushi","02_tora","03_u","04_tatsu","05_mi","06_uma","07_hitsuji","08_saru","09_tori","10_inu","11_i"];});

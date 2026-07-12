@@ -1,0 +1,11 @@
+# 全部無視してから、公開に必要な実行時ファイルだけ許可する方式（秘密鍵・node_modules等の誤公開防止）
+/*
+!/index.html
+!/chara.js
+!/path-util.js
+!/chara-trace.js
+!/.nojekyll
+!/.gitignore
+!/assets
+/assets/*
+!/assets/zodiac-trace
