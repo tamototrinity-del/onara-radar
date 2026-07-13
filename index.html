@@ -280,6 +280,9 @@ const NOISE_MARGIN_DB = 12;    // ノイズフロア+これ以上で本体（検
 // 大きさ：絶対dB(dBFS)。環境ノイズは差し引かない。-38/-12 も試せるよう定数化。
 const SIZE_DB_MIN = -50;
 const SIZE_DB_MAX = -10;
+// 大きさの「表示のみ」の換算オフセット（内部計算/スコアは不変）。dBFS+この値で日常の音圧感覚に近いプラス表記に。
+const DB_DISPLAY_OFFSET = 90;
+function fmtDb(dbfs){ return (dbfs + DB_DISPLAY_OFFSET).toFixed(1) + ' dB'; }
 // 長さ：足切り10sとは別に 0.1〜LEN_SCORE_MAX_SEC で正規化
 const LEN_SCORE_MAX_SEC = 2.0;
 // 安定感：RMS窓0.03s、CVを 0.3〜2.7 で正規化
@@ -708,7 +711,7 @@ function displayResult(s) {
   document.getElementById('zodiac-display').textContent = zodiac;
 
   document.getElementById('d-note').textContent   = note + hilow + ' / ' + zodiac;
-  document.getElementById('d-size').textContent   = s.dbVal.toFixed(1) + ' dB';
+  document.getElementById('d-size').textContent   = fmtDb(s.dbVal);
   document.getElementById('d-length').textContent = s.durationSec.toFixed(2) + ' s';
   document.getElementById('d-wet').textContent    = s.wet + ' %';
   document.getElementById('d-heavy').textContent  = s.heavy + ' %';
@@ -881,7 +884,7 @@ function openDetail(i){
   document.getElementById('detail-zodiac').textContent = e.zodiac;
   document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + e.zodiac;
   document.getElementById('dd-type').textContent = e.type + '（周期性 ' + (e.period!=null?(+e.period).toFixed(2):'-') + '）';
-  document.getElementById('dd-size').textContent = e.dbVal!=null? (+e.dbVal).toFixed(1)+' dB' : (e.size+' %');
+  document.getElementById('dd-size').textContent = e.dbVal!=null? fmtDb(+e.dbVal) : (e.size+' %');
   document.getElementById('dd-length').textContent = e.durationSec!=null? (+e.durationSec).toFixed(2)+' s' : (e.length+' %');
   document.getElementById('dd-wet').textContent = e.wet + ' %';
   document.getElementById('dd-heavy').textContent = e.heavy + ' %';
