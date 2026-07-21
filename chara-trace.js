@@ -95,7 +95,8 @@
     const target = (0.60 + 0.32 * v.size / 100) * 88;   // size小=60%, size大=92%の占有（枠に余白）
     const f = (target / E).toFixed(4);
 
-    const wetT = (v.wet - 50) / 50, blur = (v.wet / 100) * 2.0;
+    // にじみは中間(50)超の分だけランプ＝乾〜普通はくっきり、湿った個体だけにじむ（輪郭の不要なボケ回避）
+    const wetT = (v.wet - 50) / 50, blur = Math.max(0, (v.wet - 50) / 50) * 2.2;
     let cm = null;
     if (wetT > 0) cm = `${1-0.28*wetT} 0 0 0 0  0 ${1-0.09*wetT} 0 0 ${0.02*wetT}  0 0 1 0 ${0.09*wetT}  0 0 0 1 0`;
     else if (wetT < 0) { const t=-wetT; cm = `1 0 0 0 ${0.035*t}  0 ${1-0.02*t} 0 0 ${0.008*t}  0 0 ${1-0.10*t} 0 0  0 0 0 1 0`; }
