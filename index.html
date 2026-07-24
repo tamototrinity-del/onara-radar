@@ -148,6 +148,8 @@
   <div class="level-bar-bg"><div class="level-bar-fill" id="level-fill"></div></div>
 </div>
 
+<div id="reveal-msg" class="reveal-msg" style="display:none;">あなたの中の住人が姿を現しました</div>
+
 <div class="char-stage">
   <svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
@@ -171,13 +173,13 @@
   <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="d-stable">—</span></div>
 </div>
 
-<button class="btn btn-dex-register" id="btn-dex-register" style="display:none; background:#3a6a4a; color:#fff; margin-top:12px;">📖 図鑑に登録</button>
+<button class="btn btn-dex-register" id="btn-dex-register" style="display:none; background:#3a6a4a; color:#fff; margin-top:12px;">記録する</button>
 <button class="btn btn-reset" id="btn-reset" style="margin-top:10px; display:none;">もう一度</button>
 
 <div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
 
-<!-- 図鑑への導線 -->
-<button id="btn-dex-open" class="dex-fab">📖 図鑑</button>
+<!-- 住人名簿への導線 -->
+<button id="btn-dex-open" class="dex-fab">📖 住人名簿</button>
 
 <style>
   .dex-fab { position:fixed; top:12px; right:12px; z-index:20; background:#2a2a2a; color:#fff; border:none;
@@ -190,14 +192,14 @@
   .ov-back { background:transparent; border:none; color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
   .ov-count { font-size:12px; color:#ccc; }
   .dex-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:16px; max-width:520px; margin:0 auto; }
-  .dex-cell { background:#fff; border:1px solid #e0ddd8; border-radius:12px; padding:6px 4px 8px; text-align:center; position:relative; }
+  .dex-cell { background:#fff; border:1px solid #e0ddd8; border-radius:12px; padding:6px 4px 8px; text-align:center; position:relative; min-height:150px; }
   .dex-cell.filled { cursor:pointer; }
+  .dex-cell.empty { background:#fbfaf8; }
   .dex-cell svg { display:block; margin:0 auto; width:100%; height:auto; }
-  .dex-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:112px; }
-  .dex-empty .sil { width:64px; height:64px; border-radius:50%; background:#e4e0da; }
   .dex-zod { font-size:13px; font-weight:700; margin-top:2px; }
   .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
-  .dex-empty-lbl { font-size:11px; color:#aaa; }
+  /* キャラ出現時の文言 */
+  .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 -2px; }
   /* 詳細 */
   .detail-body { max-width:380px; margin:0 auto; padding:16px; text-align:center; }
   .detail-body .char-stage { width:210px; height:210px; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; }
@@ -218,15 +220,15 @@
   .swap-btns .btn { margin:0; flex:1; padding:12px; }
 </style>
 
-<!-- 図鑑グリッド -->
+<!-- 住人名簿グリッド -->
 <div class="overlay" id="dex-overlay">
-  <div class="ov-head"><button class="ov-back" id="dex-close">✕ 閉じる</button><div class="ov-title">図鑑</div><div class="ov-count" id="dex-count"></div></div>
+  <div class="ov-head"><button class="ov-back" id="dex-close">✕ 閉じる</button><div class="ov-title">住人名簿</div><div class="ov-count"></div></div>
   <div class="dex-grid" id="dex-grid"></div>
 </div>
 
 <!-- 個体詳細 -->
 <div class="overlay" id="detail-overlay">
-  <div class="ov-head"><button class="ov-back" id="detail-close">‹ 図鑑</button><div class="ov-title" id="detail-title">個体詳細</div><div></div></div>
+  <div class="ov-head"><button class="ov-back" id="detail-close">‹ 住人名簿</button><div class="ov-title" id="detail-title">個体詳細</div><div></div></div>
   <div class="detail-body">
     <div class="char-stage"><svg id="detail-svg" width="210" height="210" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
     <div id="detail-typebadge" class="detail-type-badge"></div>
@@ -545,6 +547,7 @@ btnStart.addEventListener('click', async () => {
   document.getElementById('specs').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
   document.getElementById('btn-dex-register').style.display = 'none';
+  document.getElementById('reveal-msg').style.display = 'none';
   btnReset.style.display = 'none';
 
   try {
@@ -693,6 +696,7 @@ btnReset.addEventListener('click', () => {
   btnStart.disabled = false;
   btnReset.style.display = 'none';
   document.getElementById('btn-dex-register').style.display = 'none';
+  document.getElementById('reveal-msg').style.display = 'none';
   document.getElementById('specs').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
   setStatus('マイクボタンを押して開始', 'status-idle');
@@ -723,7 +727,8 @@ function displayResult(s) {
 
   drawRadar(s);
   drawMouse(s);
-  lastScores = s;                                          // 図鑑登録用に保持
+  document.getElementById('reveal-msg').style.display = 'block';  // 住人が姿を現した文言
+  lastScores = s;                                          // 記録（住人名簿）用に保持
   document.getElementById('btn-dex-register').style.display = 'block';
   btnReset.style.display = 'block';
   state = 'idle';
@@ -765,7 +770,7 @@ function logResult(s) {
     body: JSON.stringify(payload),
   })
     .then(r => r.json())
-    .then(d => { if (logEl) logEl.textContent = d && d.ok ? '📝 記録しました' : ''; })
+    .then(d => { if (logEl) logEl.textContent = ''; })
     .catch(e => { if (logEl) logEl.textContent = ''; });
 }
 
@@ -780,7 +785,7 @@ function ensureSpecies(zi, cb) {
   s.onerror = () => cb(new Error('trace data load failed: ' + key));
   document.head.appendChild(s);
 }
-// 任意のsvg要素へキャラ描画（干支データ動的ロード込み）。図鑑グリッド/詳細/入替でも使う。
+// 任意のsvg要素へキャラ描画（干支データ動的ロード込み）。住人名簿グリッド/詳細/入替でも使う。
 function renderCharaInto(svg, v, uid) {
   const zi = (v.noteIdx != null) ? v.noteIdx : 0;
   ensureSpecies(zi, function (err) {
@@ -834,7 +839,7 @@ function drawRadarEmpty() {
 
 drawRadarEmpty();
 
-// ===== 図鑑 =====
+// ===== 住人名簿 =====
 const DEX_KEY = 'onara_dex_v1';
 let lastScores = null;
 const DEX_TYPECOL = { '王子':'#4f79c8', '王女':'#d46a94', '野良':'#7a8a7a' };
@@ -854,21 +859,24 @@ function hlStr(e){ return e.hilow>0?' [Hi]':e.hilow<0?' [Low]':''; }
 
 function refreshDexGrid() {
   const dex = dexLoad(), grid = document.getElementById('dex-grid');
-  grid.innerHTML = ''; let filled = 0;
-  for (let i=0;i<12;i++){
-    const e = dex[i], cell = document.createElement('div');
-    cell.className = 'dex-cell' + (e?' filled':'');
-    if (e) {
-      filled++;
-      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ZODIACS[i]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
-      renderCharaInto(cell.querySelector('svg'), e, 'dex'+i);
-      cell.onclick = () => openDetail(i);
+  grid.innerHTML = '';
+  // 記録した順（savedAt昇順）に左上から並べる。干支順にはしない（分類を先に見せないため）。
+  const recorded = [];
+  for (let i=0;i<12;i++) if (dex[i]) recorded.push({ zi:i, e:dex[i] });
+  recorded.sort((a,b) => (a.e.savedAt||0) - (b.e.savedAt||0));
+  for (let n=0;n<12;n++){
+    const cell = document.createElement('div');
+    if (n < recorded.length) {
+      const zi = recorded[n].zi, e = recorded[n].e;
+      cell.className = 'dex-cell filled';
+      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ZODIACS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
+      renderCharaInto(cell.querySelector('svg'), e, 'dex'+zi);
+      cell.onclick = () => openDetail(zi);
     } else {
-      cell.innerHTML = `<div class="dex-empty"><div class="sil"></div></div><div class="dex-zod" style="color:#bbb">${ZODIACS[i]}</div><div class="dex-empty-lbl">未登録</div>`;
+      cell.className = 'dex-cell empty';   // 空きは無地の枠のみ（干支名・文言なし）
     }
     grid.appendChild(cell);
   }
-  document.getElementById('dex-count').textContent = filled + ' / 12';
 }
 function openDex(){ refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
 function closeDex(){ document.getElementById('dex-overlay').classList.remove('show'); }
@@ -898,7 +906,7 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('📖 図鑑に登録しました（'+ZODIACS[zi]+'）'); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('記録しました（'+ZODIACS[zi]+'）'); }
   else { openSwap(zi, entry, dex[zi]); }
 }
 function flashReg(msg){ const el=document.getElementById('log-status'); if(el) el.textContent=msg; }
@@ -915,7 +923,7 @@ function openSwap(zi, newEntry, curEntry){
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('📖 入れ替えました（'+ZODIACS[swapCtx.zi]+'）'); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('入れ替えました（'+ZODIACS[swapCtx.zi]+'）'); }
   swapCtx=null;
 }
 
