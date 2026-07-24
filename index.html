@@ -148,33 +148,48 @@
   <div class="level-bar-bg"><div class="level-bar-fill" id="level-fill"></div></div>
 </div>
 
-<div id="reveal-msg" class="reveal-msg" style="display:none;">あなたの中の住人が姿を現しました</div>
-
-<div class="char-stage">
-  <svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg>
-</div>
-<div class="note-key" id="note-display">—</div>
-<div class="note-zodiac" id="zodiac-display">待機中</div>
-
-<div class="radar-wrap">
-  <canvas id="radar" width="200" height="200"></canvas>
-</div>
-
 <div class="invalid-msg" id="invalid-msg">⚠ 有効な音が検出されませんでした。もう一度お試しください。</div>
 
-<div class="specs" id="specs">
-  <div class="specs-title">診断諸元</div>
-  <div class="spec-row"><span class="spec-key">音階・干支</span><span class="spec-val" id="d-note">—</span></div>
-  <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="d-size">—</span></div>
-  <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="d-length">—</span></div>
-  <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="d-wet">—</span></div>
-  <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="d-heavy">—</span></div>
-  <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="d-sharp">—</span></div>
-  <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="d-stable">—</span></div>
-</div>
+<!-- 診断結果（3ページ分割） -->
+<div id="result" style="display:none; width:100%;">
+  <div class="slider-vp">
+    <div class="slider" id="slider">
 
-<button class="btn btn-dex-register" id="btn-dex-register" style="display:none; background:#3a6a4a; color:#fff; margin-top:12px;">記録する</button>
-<button class="btn btn-reset" id="btn-reset" style="margin-top:10px; display:none;">もう一度</button>
+      <!-- 1p: 音階カード ＋ 諸元（6項目のみ。干支・タイプ・キャラは出さない） -->
+      <div class="page">
+        <div class="note-card" id="note-display">—</div>
+        <div class="specs" id="specs" style="display:block;">
+          <div class="specs-title">診断諸元</div>
+          <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="d-size">—</span></div>
+          <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="d-length">—</span></div>
+          <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="d-wet">—</span></div>
+          <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="d-heavy">—</span></div>
+          <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="d-sharp">—</span></div>
+          <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="d-stable">—</span></div>
+        </div>
+        <div class="pg-hint">← スワイプ →</div>
+      </div>
+
+      <!-- 2p: レーダーのみ ＋ 姿を見るボタン -->
+      <div class="page">
+        <div class="radar-wrap"><canvas id="radar" width="200" height="200"></canvas></div>
+        <button class="btn" id="btn-reveal" style="background:#2a2a2a; color:#fff;">姿を見る</button>
+      </div>
+
+      <!-- 3p: 出現 ＋ キャラ ＋ 干支 ＋ タイプ -->
+      <div class="page">
+        <div class="reveal-msg" id="reveal-msg">あなたの中の住人が姿を現しました</div>
+        <div class="char-stage"><svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
+        <div class="reveal-type" id="reveal-type"></div>
+        <button class="btn btn-dex-register" id="btn-dex-register" style="background:#3a6a4a; color:#fff;">記録する</button>
+      </div>
+
+    </div>
+  </div>
+  <div class="dots" id="dots"><span></span><span></span><span></span></div>
+  <button class="btn btn-reset" id="btn-reset" style="margin-top:4px;">もう一度</button>
+</div>
 
 <div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
 
@@ -199,7 +214,18 @@
   .dex-zod { font-size:13px; font-weight:700; margin-top:2px; }
   .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
   /* キャラ出現時の文言 */
-  .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 -2px; }
+  .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 6px; }
+  /* 診断結果の3ページスライダー */
+  .slider-vp { width:100%; max-width:380px; margin:0 auto; overflow:hidden; }
+  .slider { display:flex; transition:transform 0.3s ease; }
+  .page { flex:0 0 100%; display:flex; flex-direction:column; align-items:center; padding:2px 8px 0; }
+  .note-card { font-size:44px; font-weight:800; color:#2a2a2a; letter-spacing:0.02em; background:#fff;
+    border:1px solid #e0ddd8; border-radius:14px; padding:16px 28px; margin:6px 0 16px; min-width:150px; text-align:center; }
+  .pg-hint { font-size:11px; color:#c2bcb2; margin-top:14px; letter-spacing:0.1em; }
+  .reveal-type { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 12px; border-radius:10px; margin-bottom:12px; }
+  .dots { display:flex; gap:8px; justify-content:center; margin:14px 0 8px; }
+  .dots span { width:8px; height:8px; border-radius:50%; background:#d5d0c8; transition:background .2s; }
+  .dots span.on { background:#2a2a2a; }
   /* 詳細 */
   .detail-body { max-width:380px; margin:0 auto; padding:16px; text-align:center; }
   .detail-body .char-stage { width:210px; height:210px; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; }
@@ -544,11 +570,8 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
 btnStart.addEventListener('click', async () => {
   if (state !== 'idle') return;
   btnStart.disabled = true;
-  document.getElementById('specs').style.display = 'none';
+  document.getElementById('result').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
-  document.getElementById('btn-dex-register').style.display = 'none';
-  document.getElementById('reveal-msg').style.display = 'none';
-  btnReset.style.display = 'none';
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -659,7 +682,6 @@ btnStart.addEventListener('click', async () => {
     if (recordedSamples.length === 0) {
       setStatus('音が検出されませんでした', 'status-error');
       document.getElementById('invalid-msg').style.display = 'block';
-      btnReset.style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
       return;
@@ -675,7 +697,6 @@ btnStart.addEventListener('click', async () => {
     if (!scores) {
       setStatus('有効な屁音が検出されませんでした', 'status-error');
       document.getElementById('invalid-msg').style.display = 'block';
-      btnReset.style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
       return;
@@ -694,27 +715,46 @@ btnStart.addEventListener('click', async () => {
 btnReset.addEventListener('click', () => {
   state = 'idle';
   btnStart.disabled = false;
-  btnReset.style.display = 'none';
-  document.getElementById('btn-dex-register').style.display = 'none';
-  document.getElementById('reveal-msg').style.display = 'none';
-  document.getElementById('specs').style.display = 'none';
+  document.getElementById('result').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
   setStatus('マイクボタンを押して開始', 'status-idle');
-  document.getElementById('note-display').textContent = '—';
-  document.getElementById('zodiac-display').textContent = '待機中';
   drawRadarEmpty();
   drawMouseDefault();
 });
+
+// ===== 診断結果の3ページスライダー =====
+let curPage = 0;
+function updateDots(){ const d = document.getElementById('dots').children; for (let i=0;i<d.length;i++) d[i].classList.toggle('on', i===curPage); }
+function goPage(n){
+  curPage = Math.max(0, Math.min(2, n));
+  document.getElementById('slider').style.transform = 'translateX(' + (-curPage*100) + '%)';
+  updateDots();
+}
+document.getElementById('btn-reveal').addEventListener('click', () => goPage(2)); // 2p→3p はボタンのみ
+(function(){
+  const vp = document.querySelector('.slider-vp'); let x0=null, y0=null;
+  vp.addEventListener('touchstart', e => { x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
+  vp.addEventListener('touchend', e => {
+    if (x0==null) return;
+    const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+    if (Math.abs(dx)>40 && Math.abs(dx)>Math.abs(dy)) {
+      if (dx<0) { if (curPage===0) goPage(1); }   // 左スワイプ: 1→2 のみ（2→3はボタン限定）
+      else { if (curPage>0) goPage(curPage-1); }  // 右スワイプ: 戻る
+    }
+    x0=null;
+  }, {passive:true});
+})();
 
 function displayResult(s) {
   const note   = NOTES[s.noteIdx];
   const zodiac = ZODIACS[s.noteIdx];
   const hilow  = s.hilow > 0 ? ' [Hi]' : s.hilow < 0 ? ' [Low]' : '';
 
-  document.getElementById('note-display').textContent = note + hilow;
-  document.getElementById('zodiac-display').textContent = zodiac;
+  document.getElementById('note-display').textContent = note + hilow;   // 1p: 音階カード（干支は出さない）
+  document.getElementById('zodiac-display').textContent = zodiac;         // 3p: 干支
+  const tb = document.getElementById('reveal-type');                      // 3p: タイプ
+  tb.textContent = s.type; tb.style.background = DEX_TYPECOL[s.type] || '#999';
 
-  document.getElementById('d-note').textContent   = note + hilow + ' / ' + zodiac;
   document.getElementById('d-size').textContent   = fmtDb(s.dbVal);
   document.getElementById('d-length').textContent = s.durationSec.toFixed(2) + ' s';
   document.getElementById('d-wet').textContent    = s.wet + ' %';
@@ -722,15 +762,13 @@ function displayResult(s) {
   document.getElementById('d-sharp').textContent  = s.sharp + ' pt';
   document.getElementById('d-stable').textContent = s.stable + ' %';
 
-  document.getElementById('specs').style.display = 'block';
   setStatus('診断完了', 'status-done');
-
   drawRadar(s);
   drawMouse(s);
-  document.getElementById('reveal-msg').style.display = 'block';  // 住人が姿を現した文言
   lastScores = s;                                          // 記録（住人名簿）用に保持
-  document.getElementById('btn-dex-register').style.display = 'block';
-  btnReset.style.display = 'block';
+
+  document.getElementById('result').style.display = 'block';
+  goPage(0);                                               // 1ページ目（諸元）から
   state = 'idle';
   btnStart.disabled = false;
 
