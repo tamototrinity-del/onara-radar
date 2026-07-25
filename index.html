@@ -116,10 +116,10 @@
     display: none;
   }
   .specs-title { background: #2a2a2a; color: #fff; font-size: 11px; letter-spacing: 0.12em; padding: 8px 14px; }
-  .spec-row { display: flex; justify-content: space-between; padding: 8px 14px; font-size: 12px; border-bottom: 1px solid #f0ede8; }
+  .spec-row { display: flex; justify-content: space-between; padding: 10px 14px; font-size: 15px; border-bottom: 1px solid #eae6df; }
   .spec-row:last-child { border-bottom: none; }
-  .spec-key { color: #666; }
-  .spec-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .spec-key { color: #2e2e2e; font-weight: 600; }
+  .spec-val { font-weight: 700; color: #1a1a1a; font-size: 16px; font-variant-numeric: tabular-nums; }
 
   .invalid-msg {
     width: 100%;
@@ -157,7 +157,10 @@
 
       <!-- 1p: 音階カード ＋ 諸元（6項目のみ。干支・タイプ・キャラは出さない） -->
       <div class="page">
-        <div class="note-card" id="note-display">—</div>
+        <div class="note-card">
+          <div class="note-card-label">音階</div>
+          <div class="note-card-val" id="note-display">—</div>
+        </div>
         <div class="specs" id="specs" style="display:block;">
           <div class="specs-title">診断諸元</div>
           <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="d-size">—</span></div>
@@ -219,8 +222,10 @@
   .slider-vp { width:100%; max-width:380px; margin:0 auto; overflow:hidden; }
   .slider { display:flex; transition:transform 0.3s ease; }
   .page { flex:0 0 100%; display:flex; flex-direction:column; align-items:center; padding:2px 8px 0; }
-  .note-card { font-size:44px; font-weight:800; color:#2a2a2a; letter-spacing:0.02em; background:#fff;
-    border:1px solid #e0ddd8; border-radius:14px; padding:16px 28px; margin:6px 0 16px; min-width:150px; text-align:center; }
+  .note-card { background:#fff; border:1px solid #e0ddd8; border-radius:14px;
+    padding:12px 28px 16px; margin:6px 0 16px; min-width:150px; text-align:center; }
+  .note-card-label { font-size:11px; font-weight:700; color:#9a948a; letter-spacing:0.16em; margin-bottom:4px; }
+  .note-card-val { font-size:46px; font-weight:800; color:#2a2a2a; letter-spacing:0.02em; line-height:1.1; }
   .pg-hint { font-size:11px; color:#c2bcb2; margin-top:14px; letter-spacing:0.1em; }
   .reveal-type { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 12px; border-radius:10px; margin-bottom:12px; }
   .dots { display:flex; gap:8px; justify-content:center; margin:14px 0 8px; }
@@ -296,6 +301,8 @@
 <script>
 const NOTES    = ['A','A#','B','C','C#','D','D#','E','F','F#','G','G#'];
 const ZODIACS  = ['子（ね）','丑（うし）','寅（とら）','卯（う）','辰（たつ）','巳（み）','午（うま）','未（ひつじ）','申（さる）','酉（とり）','戌（いぬ）','亥（い）'];
+// 住人の呼び名（ユーザー表示は動物名で統一。ZODIACS は内部データ用に保持）
+const ANIMALS  = ['ねずみ','うし','とら','うさぎ','りゅう','へび','うま','ひつじ','さる','とり','いぬ','いのしし'];
 
 // 有効範囲
 const VALID_FREQ_MIN = 50;
@@ -747,11 +754,11 @@ document.getElementById('btn-reveal').addEventListener('click', () => goPage(2))
 
 function displayResult(s) {
   const note   = NOTES[s.noteIdx];
-  const zodiac = ZODIACS[s.noteIdx];
+  const animal = ANIMALS[s.noteIdx];
   const hilow  = s.hilow > 0 ? ' [Hi]' : s.hilow < 0 ? ' [Low]' : '';
 
-  document.getElementById('note-display').textContent = note + hilow;   // 1p: 音階カード（干支は出さない）
-  document.getElementById('zodiac-display').textContent = zodiac;         // 3p: 干支
+  document.getElementById('note-display').textContent = note + hilow;   // 1p: 音階カード（キャラ名は出さない）
+  document.getElementById('zodiac-display').textContent = animal;        // 3p: 住人の呼び名（動物名）
   const tb = document.getElementById('reveal-type');                      // 3p: タイプ
   tb.textContent = s.type; tb.style.background = DEX_TYPECOL[s.type] || '#999';
 
@@ -865,8 +872,8 @@ function drawRadarInto(canvas, v) {
   ctx.closePath(); ctx.fillStyle='rgba(42,42,42,0.15)'; ctx.fill();
   ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=2; ctx.stroke();
   for(let i=0;i<n;i++){const p=pt(i,R*values[i]/100);ctx.beginPath();ctx.arc(p.x,p.y,3.5,0,Math.PI*2);ctx.fillStyle='#2a2a2a';ctx.fill();}
-  ctx.fillStyle='#555'; ctx.font='10px "Hiragino Sans",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(let i=0;i<n;i++){const p=pt(i,R+18);ctx.fillText(labels[i],p.x,p.y);}
+  ctx.fillStyle='#2a2a2a'; ctx.font='bold 12px "Hiragino Sans",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<n;i++){const p=pt(i,R+16);ctx.fillText(labels[i],p.x,p.y);}
 }
 
 function drawRadarEmpty() {
@@ -907,7 +914,7 @@ function refreshDexGrid() {
     if (n < recorded.length) {
       const zi = recorded[n].zi, e = recorded[n].e;
       cell.className = 'dex-cell filled';
-      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ZODIACS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
+      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
       renderCharaInto(cell.querySelector('svg'), e, 'dex'+zi);
       cell.onclick = () => openDetail(zi);
     } else {
@@ -921,14 +928,14 @@ function closeDex(){ document.getElementById('dex-overlay').classList.remove('sh
 
 function openDetail(i){
   const e = dexLoad()[i]; if(!e) return;
-  document.getElementById('detail-title').textContent = ZODIACS[i];
+  document.getElementById('detail-title').textContent = ANIMALS[i];
   renderCharaInto(document.getElementById('detail-svg'), e, 'detail');
   drawRadarInto(document.getElementById('detail-radar'), e);
   const badge = document.getElementById('detail-typebadge');
   badge.textContent = e.type; badge.style.background = DEX_TYPECOL[e.type]||'#999';
   document.getElementById('detail-note').textContent = e.note + hlStr(e);
-  document.getElementById('detail-zodiac').textContent = e.zodiac;
-  document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + e.zodiac;
+  document.getElementById('detail-zodiac').textContent = ANIMALS[i];
+  document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + ANIMALS[i];
   document.getElementById('dd-type').textContent = e.type + '（周期性 ' + (e.period!=null?(+e.period).toFixed(2):'-') + '）';
   document.getElementById('dd-size').textContent = e.dbVal!=null? fmtDb(+e.dbVal) : (e.size+' %');
   document.getElementById('dd-length').textContent = e.durationSec!=null? (+e.durationSec).toFixed(2)+' s' : (e.length+' %');
@@ -944,7 +951,7 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('記録しました（'+ZODIACS[zi]+'）'); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('記録しました（'+ANIMALS[zi]+'）'); }
   else { openSwap(zi, entry, dex[zi]); }
 }
 function flashReg(msg){ const el=document.getElementById('log-status'); if(el) el.textContent=msg; }
@@ -956,12 +963,12 @@ function openSwap(zi, newEntry, curEntry){
   renderCharaInto(document.getElementById('swap-new'), newEntry, 'swapn');
   document.getElementById('swap-cur-info').textContent = curEntry.type+' '+curEntry.note+hlStr(curEntry);
   document.getElementById('swap-new-info').textContent = newEntry.type+' '+newEntry.note+hlStr(newEntry);
-  document.getElementById('swap-title').textContent = ZODIACS[zi]+'のスロットには既に住人がいます。入れ替えますか？';
+  document.getElementById('swap-title').textContent = ANIMALS[zi]+'のスロットには既に住人がいます。入れ替えますか？';
   document.getElementById('swap-overlay').classList.add('show');
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('入れ替えました（'+ZODIACS[swapCtx.zi]+'）'); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('入れ替えました（'+ANIMALS[swapCtx.zi]+'）'); }
   swapCtx=null;
 }
 
