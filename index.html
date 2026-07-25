@@ -233,9 +233,12 @@
   .dots span.on { background:#2a2a2a; }
   /* 詳細 */
   .detail-body { max-width:380px; margin:0 auto; padding:16px; text-align:center; }
+  .detail-heading { display:flex; align-items:center; justify-content:center; gap:10px; margin:2px 0 8px; }
+  .detail-name { font-size:26px; font-weight:800; color:#2a2a2a; letter-spacing:0.04em; }
   .detail-body .char-stage { width:210px; height:210px; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; }
   .detail-date { font-size:12px; color:#888; margin-top:8px; }
-  .detail-type-badge { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 10px; border-radius:10px; margin-bottom:6px; }
+  .detail-type-badge { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 10px; border-radius:10px; }
+  .detail-heading .detail-type-badge { font-size:13px; padding:3px 12px; }
   /* 入れ替え確認 */
   #swap-overlay { z-index:40; background:rgba(20,18,16,0.55); display:none; align-items:center; justify-content:center; }
   #swap-overlay.show { display:flex; }
@@ -261,14 +264,16 @@
 <div class="overlay" id="detail-overlay">
   <div class="ov-head"><button class="ov-back" id="detail-close" data-i18n="detailBack"></button><div class="ov-title" id="detail-title" data-i18n="detailTitleDefault"></div><div></div></div>
   <div class="detail-body">
+    <!-- 見出し：動物名＋タイプバッジ（シェア画像で1枚完結させるための主役情報） -->
+    <div class="detail-heading">
+      <span class="detail-name" id="detail-name"></span>
+      <span id="detail-typebadge" class="detail-type-badge"></span>
+    </div>
     <div class="char-stage"><svg id="detail-svg" width="210" height="210" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
-    <div id="detail-typebadge" class="detail-type-badge"></div>
-    <div class="note-key" id="detail-note"></div>
-    <div class="note-zodiac" id="detail-zodiac"></div>
     <div class="radar-wrap" style="margin:8px auto;"><canvas id="detail-radar" width="200" height="200"></canvas></div>
     <div class="specs" style="display:block;" id="detail-specs">
       <div class="specs-title" data-i18n="specsTitle"></div>
-      <div class="spec-row"><span class="spec-key" data-i18n="specNoteZodiac"></span><span class="spec-val" id="dd-note">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specNote"></span><span class="spec-val" id="dd-note">—</span></div>
       <div class="spec-row"><span class="spec-key" data-i18n="specType"></span><span class="spec-val" id="dd-type">—</span></div>
       <div class="spec-row"><span class="spec-key" data-i18n="specSize"></span><span class="spec-val" id="dd-size">—</span></div>
       <div class="spec-row"><span class="spec-key" data-i18n="specLength"></span><span class="spec-val" id="dd-length">—</span></div>
@@ -325,7 +330,7 @@ const STR = {
     specHeavy:     '重厚感',
     specSharp:     'キレのよさ',
     specStable:    '安定感',
-    specNoteZodiac:'音階・干支',
+    specNote:      '音階',
     specType:      'タイプ',
     pgHint:        '← スワイプ →',
     btnReveal:     '姿を見る',
@@ -1010,13 +1015,12 @@ function closeDex(){ document.getElementById('dex-overlay').classList.remove('sh
 function openDetail(i){
   const e = dexLoad()[i]; if(!e) return;
   document.getElementById('detail-title').textContent = ANIMALS[i];
+  document.getElementById('detail-name').textContent = ANIMALS[i];   // 見出しの動物名
   renderCharaInto(document.getElementById('detail-svg'), e, 'detail');
   drawRadarInto(document.getElementById('detail-radar'), e);
   const badge = document.getElementById('detail-typebadge');
   badge.textContent = typeLabel(e.type); badge.style.background = DEX_TYPECOL[e.type]||'#999';
-  document.getElementById('detail-note').textContent = e.note + hlStr(e);
-  document.getElementById('detail-zodiac').textContent = ANIMALS[i];
-  document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + ANIMALS[i];
+  document.getElementById('dd-note').textContent = e.note + hlStr(e);   // 音階のみ（動物名は見出しに集約）
   document.getElementById('dd-type').textContent = t('typeWithPeriod', typeLabel(e.type), (e.period!=null?(+e.period).toFixed(2):'-'));
   document.getElementById('dd-size').textContent = e.dbVal!=null? fmtDb(+e.dbVal) : (e.size+' %');
   document.getElementById('dd-length').textContent = e.durationSec!=null? (+e.durationSec).toFixed(2)+' s' : (e.length+' %');
