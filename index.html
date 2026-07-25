@@ -135,20 +135,20 @@
 <body>
 
 <header>
-  <div class="label-jp">屁音キャラクター診断 試作v2</div>
-  <h1>おならレーダー</h1>
+  <div class="label-jp" data-i18n="tagline"></div>
+  <h1 data-i18n="appTitle"></h1>
 </header>
 
-<div class="status-bar status-idle" id="status">マイクボタンを押して開始</div>
+<div class="status-bar status-idle" id="status" data-i18n="statusIdle"></div>
 
-<button class="btn btn-start" id="btn-start">🎙 診断開始</button>
+<button class="btn btn-start" id="btn-start" data-i18n="btnStart"></button>
 
 <div class="level-wrap" id="level-wrap">
-  <div class="level-label">入力レベル</div>
+  <div class="level-label" data-i18n="levelLabel"></div>
   <div class="level-bar-bg"><div class="level-bar-fill" id="level-fill"></div></div>
 </div>
 
-<div class="invalid-msg" id="invalid-msg">⚠ 有効な音が検出されませんでした。もう一度お試しください。</div>
+<div class="invalid-msg" id="invalid-msg" data-i18n="invalidMsg"></div>
 
 <!-- 診断結果（3ページ分割） -->
 <div id="result" style="display:none; width:100%;">
@@ -158,46 +158,46 @@
       <!-- 1p: 音階カード ＋ 諸元（6項目のみ。干支・タイプ・キャラは出さない） -->
       <div class="page">
         <div class="note-card">
-          <div class="note-card-label">音階</div>
+          <div class="note-card-label" data-i18n="noteCardLabel"></div>
           <div class="note-card-val" id="note-display">—</div>
         </div>
         <div class="specs" id="specs" style="display:block;">
-          <div class="specs-title">診断諸元</div>
-          <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="d-size">—</span></div>
-          <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="d-length">—</span></div>
-          <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="d-wet">—</span></div>
-          <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="d-heavy">—</span></div>
-          <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="d-sharp">—</span></div>
-          <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="d-stable">—</span></div>
+          <div class="specs-title" data-i18n="specsTitle"></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specSize"></span><span class="spec-val" id="d-size">—</span></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specLength"></span><span class="spec-val" id="d-length">—</span></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specWet"></span><span class="spec-val" id="d-wet">—</span></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specHeavy"></span><span class="spec-val" id="d-heavy">—</span></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specSharp"></span><span class="spec-val" id="d-sharp">—</span></div>
+          <div class="spec-row"><span class="spec-key" data-i18n="specStable"></span><span class="spec-val" id="d-stable">—</span></div>
         </div>
-        <div class="pg-hint">← スワイプ →</div>
+        <div class="pg-hint" data-i18n="pgHint"></div>
       </div>
 
       <!-- 2p: レーダーのみ ＋ 姿を見るボタン -->
       <div class="page">
         <div class="radar-wrap"><canvas id="radar" width="200" height="200"></canvas></div>
-        <button class="btn" id="btn-reveal" style="background:#2a2a2a; color:#fff;">姿を見る</button>
+        <button class="btn" id="btn-reveal" data-i18n="btnReveal" style="background:#2a2a2a; color:#fff;"></button>
       </div>
 
       <!-- 3p: 出現 ＋ キャラ ＋ 干支 ＋ タイプ -->
       <div class="page">
-        <div class="reveal-msg" id="reveal-msg">あなたの中の住人が姿を現しました</div>
+        <div class="reveal-msg" id="reveal-msg" data-i18n="revealMsg"></div>
         <div class="char-stage"><svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
         <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
         <div class="reveal-type" id="reveal-type"></div>
-        <button class="btn btn-dex-register" id="btn-dex-register" style="background:#3a6a4a; color:#fff;">記録する</button>
+        <button class="btn btn-dex-register" id="btn-dex-register" data-i18n="btnRegister" style="background:#3a6a4a; color:#fff;"></button>
       </div>
 
     </div>
   </div>
   <div class="dots" id="dots"><span></span><span></span><span></span></div>
-  <button class="btn btn-reset" id="btn-reset" style="margin-top:4px;">もう一度</button>
+  <button class="btn btn-reset" id="btn-reset" data-i18n="btnReset" style="margin-top:4px;"></button>
 </div>
 
 <div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
 
 <!-- 住人名簿への導線 -->
-<button id="btn-dex-open" class="dex-fab">📖 住人名簿</button>
+<button id="btn-dex-open" class="dex-fab" data-i18n="dexOpen"></button>
 
 <style>
   .dex-fab { position:fixed; top:12px; right:12px; z-index:20; background:#2a2a2a; color:#fff; border:none;
@@ -253,13 +253,13 @@
 
 <!-- 住人名簿グリッド -->
 <div class="overlay" id="dex-overlay">
-  <div class="ov-head"><button class="ov-back" id="dex-close">✕ 閉じる</button><div class="ov-title">住人名簿</div><div class="ov-count"></div></div>
+  <div class="ov-head"><button class="ov-back" id="dex-close" data-i18n="dexClose"></button><div class="ov-title" data-i18n="dexTitle"></div><div class="ov-count"></div></div>
   <div class="dex-grid" id="dex-grid"></div>
 </div>
 
 <!-- 個体詳細 -->
 <div class="overlay" id="detail-overlay">
-  <div class="ov-head"><button class="ov-back" id="detail-close">‹ 住人名簿</button><div class="ov-title" id="detail-title">個体詳細</div><div></div></div>
+  <div class="ov-head"><button class="ov-back" id="detail-close" data-i18n="detailBack"></button><div class="ov-title" id="detail-title" data-i18n="detailTitleDefault"></div><div></div></div>
   <div class="detail-body">
     <div class="char-stage"><svg id="detail-svg" width="210" height="210" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
     <div id="detail-typebadge" class="detail-type-badge"></div>
@@ -267,15 +267,15 @@
     <div class="note-zodiac" id="detail-zodiac"></div>
     <div class="radar-wrap" style="margin:8px auto;"><canvas id="detail-radar" width="200" height="200"></canvas></div>
     <div class="specs" style="display:block;" id="detail-specs">
-      <div class="specs-title">診断諸元</div>
-      <div class="spec-row"><span class="spec-key">音階・干支</span><span class="spec-val" id="dd-note">—</span></div>
-      <div class="spec-row"><span class="spec-key">タイプ</span><span class="spec-val" id="dd-type">—</span></div>
-      <div class="spec-row"><span class="spec-key">大きさ</span><span class="spec-val" id="dd-size">—</span></div>
-      <div class="spec-row"><span class="spec-key">長さ</span><span class="spec-val" id="dd-length">—</span></div>
-      <div class="spec-row"><span class="spec-key">湿り気</span><span class="spec-val" id="dd-wet">—</span></div>
-      <div class="spec-row"><span class="spec-key">重厚感</span><span class="spec-val" id="dd-heavy">—</span></div>
-      <div class="spec-row"><span class="spec-key">キレのよさ</span><span class="spec-val" id="dd-sharp">—</span></div>
-      <div class="spec-row"><span class="spec-key">安定感</span><span class="spec-val" id="dd-stable">—</span></div>
+      <div class="specs-title" data-i18n="specsTitle"></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specNoteZodiac"></span><span class="spec-val" id="dd-note">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specType"></span><span class="spec-val" id="dd-type">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specSize"></span><span class="spec-val" id="dd-size">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specLength"></span><span class="spec-val" id="dd-length">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specWet"></span><span class="spec-val" id="dd-wet">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specHeavy"></span><span class="spec-val" id="dd-heavy">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specSharp"></span><span class="spec-val" id="dd-sharp">—</span></div>
+      <div class="spec-row"><span class="spec-key" data-i18n="specStable"></span><span class="spec-val" id="dd-stable">—</span></div>
     </div>
     <div class="detail-date" id="detail-date"></div>
   </div>
@@ -284,13 +284,13 @@
 <!-- 入れ替え確認 -->
 <div class="overlay" id="swap-overlay">
   <div class="swap-box">
-    <div class="swap-title" id="swap-title">このスロットには既に住人がいます。入れ替えますか？</div>
+    <div class="swap-title" id="swap-title" data-i18n="swapTitleDefault"></div>
     <div class="swap-compare">
-      <div class="swap-side"><div class="swap-lbl">現在の住人</div><svg id="swap-cur" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-cur-info"></div></div>
+      <div class="swap-side"><div class="swap-lbl" data-i18n="swapCurLabel"></div><svg id="swap-cur" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-cur-info"></div></div>
       <div class="swap-arrow">→</div>
-      <div class="swap-side"><div class="swap-lbl">新しい住人</div><svg id="swap-new" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-new-info"></div></div>
+      <div class="swap-side"><div class="swap-lbl" data-i18n="swapNewLabel"></div><svg id="swap-new" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg><div class="swap-info" id="swap-new-info"></div></div>
     </div>
-    <div class="swap-btns"><button class="btn" id="swap-yes" style="background:#3a6a4a;color:#fff;">入れ替える</button><button class="btn btn-reset" id="swap-no">やめる</button></div>
+    <div class="swap-btns"><button class="btn" id="swap-yes" data-i18n="swapYes" style="background:#3a6a4a;color:#fff;"></button><button class="btn btn-reset" id="swap-no" data-i18n="swapNo"></button></div>
   </div>
 </div>
 
@@ -301,8 +301,89 @@
 <script>
 const NOTES    = ['A','A#','B','C','C#','D','D#','E','F','F#','G','G#'];
 const ZODIACS  = ['子（ね）','丑（うし）','寅（とら）','卯（う）','辰（たつ）','巳（み）','午（うま）','未（ひつじ）','申（さる）','酉（とり）','戌（いぬ）','亥（い）'];
-// 住人の呼び名（ユーザー表示は動物名で統一。ZODIACS は内部データ用に保持）
-const ANIMALS  = ['ねずみ','うし','とら','うさぎ','りゅう','へび','うま','ひつじ','さる','とり','いぬ','いのしし'];
+
+// ===== UI表示テキストの集約辞書（将来の多言語対応の土台） =====
+// UIに出る日本語はすべてここに集約する。コード各所へのベタ書きはしない。
+//   静的HTML … 要素に data-i18n="キー" を付け、applyStaticText() が流し込む。
+//   動的テキスト … t('キー', ...args) で参照（値が関数なら引数を渡して文字列を得る）。
+// 英語版を足すときは STR.en = { ... } を追加して LANG を切り替える／自動判定するだけ。
+let LANG = 'ja';
+const STR = {
+  ja: {
+    // --- 静的UI（data-i18n で適用）---
+    docTitle:      '屁音キャラ診断 — 試作v2',
+    tagline:       '屁音キャラクター診断 試作v2',
+    appTitle:      'おならレーダー',
+    btnStart:      '🎙 診断開始',
+    levelLabel:    '入力レベル',
+    invalidMsg:    '⚠ 有効な音が検出されませんでした。もう一度お試しください。',
+    noteCardLabel: '音階',
+    specsTitle:    '診断諸元',
+    specSize:      '大きさ',
+    specLength:    '長さ',
+    specWet:       '湿り気',
+    specHeavy:     '重厚感',
+    specSharp:     'キレのよさ',
+    specStable:    '安定感',
+    specNoteZodiac:'音階・干支',
+    specType:      'タイプ',
+    pgHint:        '← スワイプ →',
+    btnReveal:     '姿を見る',
+    revealMsg:     'あなたの中の住人が姿を現しました',
+    btnRegister:   '記録する',
+    btnReset:      'もう一度',
+    dexOpen:       '📖 住人名簿',
+    dexClose:      '✕ 閉じる',
+    dexTitle:      '住人名簿',
+    detailBack:    '‹ 住人名簿',
+    detailTitleDefault: '個体詳細',
+    swapTitleDefault:   'このスロットには既に住人がいます。入れ替えますか？',
+    swapCurLabel:  '現在の住人',
+    swapNewLabel:  '新しい住人',
+    swapYes:       '入れ替える',
+    swapNo:        'やめる',
+    // --- ステータス・エラー（JSから t() で参照）---
+    statusIdle:      'マイクボタンを押して開始',
+    statusMeasuring: '環境ノイズを計測中… 静かにお待ちください',
+    statusWaiting:   '準備完了 — いつでもどうぞ 🎯',
+    statusRecording: '● 録音中…',
+    statusAnalyzing: '解析中…',
+    statusDone:      '診断完了',
+    errNoSound:      '音が検出されませんでした',
+    errNoFart:       '有効な屁音が検出されませんでした',
+    errMicDenied:    'マイクへのアクセスが拒否されました',
+    // --- 引数つき可変メッセージ ---
+    recorded:       name => `記録しました（${name}）`,
+    swapped:        name => `入れ替えました（${name}）`,
+    swapTitle:      name => `${name}のスロットには既に住人がいます。入れ替えますか？`,
+    detailDate:     d => `記録日 ${d}`,
+    typeWithPeriod: (type, p) => `${type}（周期性 ${p}）`,
+    // --- 表示ラベル群 ---
+    typeLabels:  { '王子':'王子', '王女':'王女', '野良':'野良' },
+    animals:     ['ねずみ','うし','とら','うさぎ','りゅう','へび','うま','ひつじ','さる','とり','いぬ','いのしし'],
+    radarLabels: ['大きさ','長さ','湿り気','重厚感','キレ','安定感'],
+  },
+};
+// テキスト取得。関数値なら引数を渡して評価。未定義キーは ja→キー名の順にフォールバック。
+function t(key, ...args) {
+  const dict = STR[LANG] || STR.ja;
+  let v = (dict[key] != null) ? dict[key] : STR.ja[key];
+  if (v == null) return key;
+  return typeof v === 'function' ? v(...args) : v;
+}
+// タイプ名の表示ラベル（内部キー 王子/王女/野良 は不変、表示だけ辞書経由）
+function typeLabel(type) { const m = (STR[LANG] || STR.ja).typeLabels || STR.ja.typeLabels; return (m && m[type]) || type; }
+// data-i18n を持つ静的要素へ辞書テキストを流し込む（DOM構築後に一度呼ぶ）
+function applyStaticText() {
+  document.title = t('docTitle');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const s = t(el.getAttribute('data-i18n'));
+    if (s != null) el.textContent = s;
+  });
+}
+
+// 住人の呼び名（動物名）。表示は辞書から取得。内部データ用の識別には ZODIACS を使う。
+const ANIMALS = t('animals');
 
 // 有効範囲
 const VALID_FREQ_MIN = 50;
@@ -594,7 +675,7 @@ btnStart.addEventListener('click', async () => {
 
     // ---- Phase 1: ノイズフロア計測 ----
     state = 'measuring';
-    setStatus('環境ノイズを計測中… 静かにお待ちください', 'status-measure');
+    setStatus(t('statusMeasuring'), 'status-measure');
     levelWrap.style.display = 'block';
 
     const noiseRMSList = [];
@@ -618,7 +699,7 @@ btnStart.addEventListener('click', async () => {
 
     // ---- Phase 2: 待機 ----
     state = 'waiting';
-    setStatus('準備完了 — いつでもどうぞ 🎯', 'status-wait');
+    setStatus(t('statusWaiting'), 'status-wait');
     levelFill.style.width = '0%';
     levelFill.style.background = '#2a9d8f';
 
@@ -649,7 +730,7 @@ btnStart.addEventListener('click', async () => {
             isRecording = true;
             state = 'recording';
             startTime = Date.now();
-            setStatus('● 録音中…', 'status-rec');
+            setStatus(t('statusRecording'), 'status-rec');
             recordedSamples.push(...timeData);
             // 代表フレーム（低周波エネルギー最大）の初期化
             maxLowEnergy = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
@@ -680,14 +761,14 @@ btnStart.addEventListener('click', async () => {
     });
 
     state = 'done';
-    setStatus('解析中…', 'status-measure');
+    setStatus(t('statusAnalyzing'), 'status-measure');
 
     // クリーンアップ
     stream.getTracks().forEach(t => t.stop());
     levelWrap.style.display = 'none';
 
     if (recordedSamples.length === 0) {
-      setStatus('音が検出されませんでした', 'status-error');
+      setStatus(t('errNoSound'), 'status-error');
       document.getElementById('invalid-msg').style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
@@ -702,7 +783,7 @@ btnStart.addEventListener('click', async () => {
     );
 
     if (!scores) {
-      setStatus('有効な屁音が検出されませんでした', 'status-error');
+      setStatus(t('errNoFart'), 'status-error');
       document.getElementById('invalid-msg').style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
@@ -713,7 +794,7 @@ btnStart.addEventListener('click', async () => {
     displayResult(scores);
 
   } catch (e) {
-    setStatus('マイクへのアクセスが拒否されました', 'status-error');
+    setStatus(t('errMicDenied'), 'status-error');
     btnStart.disabled = false;
     state = 'idle';
   }
@@ -724,7 +805,7 @@ btnReset.addEventListener('click', () => {
   btnStart.disabled = false;
   document.getElementById('result').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
-  setStatus('マイクボタンを押して開始', 'status-idle');
+  setStatus(t('statusIdle'), 'status-idle');
   drawRadarEmpty();
   drawMouseDefault();
 });
@@ -760,7 +841,7 @@ function displayResult(s) {
   document.getElementById('note-display').textContent = note + hilow;   // 1p: 音階カード（キャラ名は出さない）
   document.getElementById('zodiac-display').textContent = animal;        // 3p: 住人の呼び名（動物名）
   const tb = document.getElementById('reveal-type');                      // 3p: タイプ
-  tb.textContent = s.type; tb.style.background = DEX_TYPECOL[s.type] || '#999';
+  tb.textContent = typeLabel(s.type); tb.style.background = DEX_TYPECOL[s.type] || '#999';
 
   document.getElementById('d-size').textContent   = fmtDb(s.dbVal);
   document.getElementById('d-length').textContent = s.durationSec.toFixed(2) + ' s';
@@ -769,7 +850,7 @@ function displayResult(s) {
   document.getElementById('d-sharp').textContent  = s.sharp + ' pt';
   document.getElementById('d-stable').textContent = s.stable + ' %';
 
-  setStatus('診断完了', 'status-done');
+  setStatus(t('statusDone'), 'status-done');
   drawRadar(s);
   drawMouse(s);
   lastScores = s;                                          // 記録（住人名簿）用に保持
@@ -856,7 +937,7 @@ function drawRadarInto(canvas, v) {
   const ctx = canvas.getContext('2d');
   const W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, R=W*0.38;
   ctx.clearRect(0,0,W,H);
-  const labels = ['大きさ','長さ','湿り気','重厚感','キレ','安定感'];
+  const labels = t('radarLabels');
   const values = [v.size,v.length,v.wet,v.heavy,v.sharp,v.stable];
   const n=6;
   const angle = i => Math.PI*2/n*i - Math.PI/2;
@@ -914,7 +995,7 @@ function refreshDexGrid() {
     if (n < recorded.length) {
       const zi = recorded[n].zi, e = recorded[n].e;
       cell.className = 'dex-cell filled';
-      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${e.type}</div>`;
+      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${typeLabel(e.type)}</div>`;
       renderCharaInto(cell.querySelector('svg'), e, 'dex'+zi);
       cell.onclick = () => openDetail(zi);
     } else {
@@ -932,18 +1013,18 @@ function openDetail(i){
   renderCharaInto(document.getElementById('detail-svg'), e, 'detail');
   drawRadarInto(document.getElementById('detail-radar'), e);
   const badge = document.getElementById('detail-typebadge');
-  badge.textContent = e.type; badge.style.background = DEX_TYPECOL[e.type]||'#999';
+  badge.textContent = typeLabel(e.type); badge.style.background = DEX_TYPECOL[e.type]||'#999';
   document.getElementById('detail-note').textContent = e.note + hlStr(e);
   document.getElementById('detail-zodiac').textContent = ANIMALS[i];
   document.getElementById('dd-note').textContent = e.note + hlStr(e) + ' / ' + ANIMALS[i];
-  document.getElementById('dd-type').textContent = e.type + '（周期性 ' + (e.period!=null?(+e.period).toFixed(2):'-') + '）';
+  document.getElementById('dd-type').textContent = t('typeWithPeriod', typeLabel(e.type), (e.period!=null?(+e.period).toFixed(2):'-'));
   document.getElementById('dd-size').textContent = e.dbVal!=null? fmtDb(+e.dbVal) : (e.size+' %');
   document.getElementById('dd-length').textContent = e.durationSec!=null? (+e.durationSec).toFixed(2)+' s' : (e.length+' %');
   document.getElementById('dd-wet').textContent = e.wet + ' %';
   document.getElementById('dd-heavy').textContent = e.heavy + ' %';
   document.getElementById('dd-sharp').textContent = e.sharp + ' pt';
   document.getElementById('dd-stable').textContent = e.stable + ' %';
-  document.getElementById('detail-date').textContent = '記録日 ' + fmtDate(e.savedAt);
+  document.getElementById('detail-date').textContent = t('detailDate', fmtDate(e.savedAt));
   document.getElementById('detail-overlay').classList.add('show');
 }
 function closeDetail(){ document.getElementById('detail-overlay').classList.remove('show'); }
@@ -951,7 +1032,7 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg('記録しました（'+ANIMALS[zi]+'）'); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg(t('recorded', ANIMALS[zi])); }
   else { openSwap(zi, entry, dex[zi]); }
 }
 function flashReg(msg){ const el=document.getElementById('log-status'); if(el) el.textContent=msg; }
@@ -961,14 +1042,14 @@ function openSwap(zi, newEntry, curEntry){
   swapCtx = { zi, newEntry };
   renderCharaInto(document.getElementById('swap-cur'), curEntry, 'swapc');
   renderCharaInto(document.getElementById('swap-new'), newEntry, 'swapn');
-  document.getElementById('swap-cur-info').textContent = curEntry.type+' '+curEntry.note+hlStr(curEntry);
-  document.getElementById('swap-new-info').textContent = newEntry.type+' '+newEntry.note+hlStr(newEntry);
-  document.getElementById('swap-title').textContent = ANIMALS[zi]+'のスロットには既に住人がいます。入れ替えますか？';
+  document.getElementById('swap-cur-info').textContent = typeLabel(curEntry.type)+' '+curEntry.note+hlStr(curEntry);
+  document.getElementById('swap-new-info').textContent = typeLabel(newEntry.type)+' '+newEntry.note+hlStr(newEntry);
+  document.getElementById('swap-title').textContent = t('swapTitle', ANIMALS[zi]);
   document.getElementById('swap-overlay').classList.add('show');
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg('入れ替えました（'+ANIMALS[swapCtx.zi]+'）'); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
   swapCtx=null;
 }
 
@@ -978,6 +1059,9 @@ document.getElementById('detail-close').addEventListener('click', closeDetail);
 document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
 document.getElementById('swap-yes').addEventListener('click', ()=>doSwap(true));
 document.getElementById('swap-no').addEventListener('click', ()=>doSwap(false));
+
+// 静的UIテキストを辞書から流し込む（data-i18n を持つ全要素＋<title>）
+applyStaticText();
 </script>
 </body>
 </html>
