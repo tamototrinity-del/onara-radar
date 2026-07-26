@@ -186,6 +186,7 @@
         <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
         <div class="reveal-type" id="reveal-type"></div>
         <button class="btn btn-dex-register" id="btn-dex-register" data-i18n="btnRegister" style="background:#3a6a4a; color:#fff;"></button>
+        <button class="btn" id="btn-share-result" data-i18n="btnShare" style="background:#e8e4de; color:#3a3a3a; margin-top:-8px;"></button>
       </div>
 
     </div>
@@ -283,6 +284,7 @@
       <div class="spec-row"><span class="spec-key" data-i18n="specStable"></span><span class="spec-val" id="dd-stable">—</span></div>
     </div>
     <div class="detail-date" id="detail-date"></div>
+    <button class="btn" id="btn-share-detail" data-i18n="btnShare" style="background:#3a6a4a; color:#fff; max-width:504px; margin:14px auto 0;"></button>
   </div>
 </div>
 
@@ -336,6 +338,7 @@ const STR = {
     btnReveal:     '姿を見る',
     revealMsg:     'あなたの中の住人が姿を現しました',
     btnRegister:   '記録する',
+    btnShare:      '📤 シェア',
     btnReset:      'もう一度',
     dexOpen:       '📖 住人名簿',
     dexClose:      '✕ 閉じる',
@@ -357,12 +360,15 @@ const STR = {
     errNoSound:      '音が検出されませんでした',
     errNoFart:       '有効な屁音が検出されませんでした',
     errMicDenied:    'マイクへのアクセスが拒否されました',
+    sharePreparing:  '画像を作成中…',
+    shareFailed:     '画像の生成に失敗しました',
     // --- 引数つき可変メッセージ ---
     recorded:       name => `記録しました（${name}）`,
     swapped:        name => `入れ替えました（${name}）`,
     swapTitle:      name => `${name}のスロットには既に住人がいます。入れ替えますか？`,
     detailDate:     d => `記録日 ${d}`,
     typeWithPeriod: (type, p) => `${type}（周期性 ${p}）`,
+    shareText:      (animal, type) => `私の中から${animal}の${type}が姿を現しました`,
     // --- 表示ラベル群 ---
     typeLabels:  { '王子':'王子', '王女':'王女', '野良':'野良' },
     animals:     ['ねずみ','うし','とら','うさぎ','りゅう','へび','うま','ひつじ','さる','とり','いぬ','いのしし'],
@@ -1012,8 +1018,10 @@ function refreshDexGrid() {
 function openDex(){ refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
 function closeDex(){ document.getElementById('dex-overlay').classList.remove('show'); }
 
+let detailEntry = null;   // シェア用：いま個体詳細で開いている住人
 function openDetail(i){
   const e = dexLoad()[i]; if(!e) return;
+  detailEntry = e;
   document.getElementById('detail-title').textContent = ANIMALS[i];
   document.getElementById('detail-name').textContent = ANIMALS[i];   // 見出しの動物名
   renderCharaInto(document.getElementById('detail-svg'), e, 'detail');
@@ -1057,10 +1065,130 @@ function doSwap(yes){
   swapCtx=null;
 }
 
+// ===== シェア画像生成（純SVG合成→PNG。html2canvas不使用でキャラのSVGフィルタも忠実に焼き込む） =====
+// 診断3ページ目・個体詳細のどちらから呼んでも、同じ「全部入り」カード
+// （動物名＋タイプバッジ／キャラ／レーダー／診断諸元＋アプリ名・URL）を生成する。
+const SHARE_URL = 'tamototrinity-del.github.io/onara-radar';
+const CARD_W = 560, CARD_H = 820, CARD_SCALE = 2;
+const CARD_FONT = "'Hiragino Sans','Yu Gothic',sans-serif";
+function xesc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// レーダーをSVGマークアップで（キャンバス版と同じ幾何。1枚合成のため）
+function radarSVGInner(cx, cy, R, values){
+  const n=6, labels=t('radarLabels');
+  const ang=i=>Math.PI*2/n*i - Math.PI/2;
+  const P=(i,r)=>[cx+r*Math.cos(ang(i)), cy+r*Math.sin(ang(i))];
+  let s='';
+  for(let g=1;g<=4;g++){ let d=''; for(let i=0;i<n;i++){ const p=P(i,R*g/4); d+=(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1); } d+='Z'; s+=`<path d="${d}" fill="none" stroke="#ddd" stroke-width="1"/>`; }
+  for(let i=0;i<n;i++){ const p=P(i,R); s+=`<line x1="${cx}" y1="${cy}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="#ddd" stroke-width="1"/>`; }
+  let d=''; for(let i=0;i<n;i++){ const p=P(i,R*values[i]/100); d+=(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1); } d+='Z';
+  s+=`<path d="${d}" fill="rgba(42,42,42,0.15)" stroke="#2a2a2a" stroke-width="2"/>`;
+  for(let i=0;i<n;i++){ const p=P(i,R*values[i]/100); s+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="#2a2a2a"/>`; }
+  for(let i=0;i<n;i++){ const p=P(i,R+18); s+=`<text x="${p[0].toFixed(1)}" y="${(p[1]+4).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="bold" fill="#2a2a2a">${xesc(labels[i])}</text>`; }
+  return s;
+}
+
+// 住人エントリ（entry）＋キャラSVG内部マークアップ から共有カードSVG文字列を作る
+function buildShareSVG(entry, charInner){
+  const zi = ((entry.noteIdx%12)+12)%12;
+  const animal  = ANIMALS[zi];
+  const typeTxt = typeLabel(entry.type);
+  const typeCol = DEX_TYPECOL[entry.type] || '#999';
+  const noteTxt = NOTES[zi] + hlStr(entry);
+  const rows = [
+    [t('specNote'),   noteTxt],
+    [t('specType'),   t('typeWithPeriod', typeTxt, (entry.period!=null?(+entry.period).toFixed(2):'-'))],
+    [t('specSize'),   entry.dbVal!=null? fmtDb(+entry.dbVal) : (entry.size+' %')],
+    [t('specLength'), entry.durationSec!=null? (+entry.durationSec).toFixed(2)+' s' : (entry.length+' %')],
+    [t('specWet'),    entry.wet+' %'],
+    [t('specHeavy'),  entry.heavy+' %'],
+    [t('specSharp'),  entry.sharp+' pt'],
+    [t('specStable'), entry.stable+' %'],
+  ];
+  // 見出し（動物名＋タイプバッジ）を中央寄せ（全角想定の概算幅で配置）
+  const nameFS=34, badgeW=64, badgeH=30, gap=12, hy=58;
+  const nameW = animal.length * nameFS * 0.94;
+  const total = nameW + gap + badgeW;
+  const hx = Math.max(28, (CARD_W - total)/2);
+  const bx = hx + nameW + gap, byTop = hy - badgeH + 4;
+  let head = `<text x="${hx.toFixed(1)}" y="${hy}" font-size="${nameFS}" font-weight="800" fill="#2a2a2a">${xesc(animal)}</text>`
+    + `<rect x="${bx.toFixed(1)}" y="${byTop}" rx="12" ry="12" width="${badgeW}" height="${badgeH}" fill="${typeCol}"/>`
+    + `<text x="${(bx+badgeW/2).toFixed(1)}" y="${byTop+badgeH/2+5}" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">${xesc(typeTxt)}</text>`;
+  // 諸元テーブル
+  const sx=28, sw=CARD_W-56, sy=520, titleH=32, rowH=28;
+  let specs = `<rect x="${sx}" y="${sy}" width="${sw}" height="${titleH+rowH*rows.length}" rx="8" ry="8" fill="#fff" stroke="#e0ddd8" stroke-width="1"/>`
+    + `<path d="M${sx} ${sy+8} a8 8 0 0 1 8 -8 h${sw-16} a8 8 0 0 1 8 8 v${titleH-8} h${-sw} Z" fill="#2a2a2a"/>`
+    + `<text x="${sx+sw/2}" y="${sy+titleH/2+4}" text-anchor="middle" font-size="12" letter-spacing="1.5" fill="#fff">${xesc(t('specsTitle'))}</text>`;
+  rows.forEach((r,i)=>{
+    const ry = sy+titleH+rowH*i;
+    if(i>0) specs += `<line x1="${sx+14}" y1="${ry}" x2="${sx+sw-14}" y2="${ry}" stroke="#eae6df" stroke-width="1"/>`;
+    specs += `<text x="${sx+16}" y="${ry+rowH/2+5}" font-size="15" font-weight="600" fill="#2e2e2e">${xesc(r[0])}</text>`
+      + `<text x="${sx+sw-16}" y="${ry+rowH/2+5}" text-anchor="end" font-size="15" font-weight="700" fill="#1a1a1a">${xesc(r[1])}</text>`;
+  });
+  const rvals = [entry.size,entry.length,entry.wet,entry.heavy,entry.sharp,entry.stable];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CARD_W} ${CARD_H}" width="${CARD_W*CARD_SCALE}" height="${CARD_H*CARD_SCALE}" font-family="${CARD_FONT}">`
+    + `<rect width="${CARD_W}" height="${CARD_H}" fill="#f7f5f0"/>`
+    + head
+    + `<svg x="180" y="84" width="200" height="200" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg">${charInner}</svg>`
+    + radarSVGInner(280, 395, 92, rvals)
+    + specs
+    + `<text x="28" y="800" font-size="16" font-weight="800" fill="#2a2a2a">${xesc(t('appTitle'))}</text>`
+    + `<text x="${CARD_W-28}" y="800" text-anchor="end" font-size="13" fill="#8a8378">${xesc(SHARE_URL)}</text>`
+    + `</svg>`;
+}
+
+// entry → PNG Blob（キャラのトレースデータをロードしてからSVG合成→data URI→canvas）
+function renderCardBlob(entry){
+  return new Promise((resolve, reject)=>{
+    const zi = ((entry.noteIdx%12)+12)%12;
+    ensureSpecies(zi, (err)=>{
+      let charInner = '';
+      if(!err && window.CharaTrace){ charInner = CharaTrace.charaTraceSVG(entry, zi, 'share'+Date.now()) || ''; }
+      if(!charInner && window.Chara){ charInner = Chara.charaSVG(entry, zi, 'share'); }
+      const svg = buildShareSVG(entry, charInner);
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const canvas = document.createElement('canvas');
+          canvas.width = CARD_W*CARD_SCALE; canvas.height = CARD_H*CARD_SCALE;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/png');
+        }catch(e){ reject(e); }
+      };
+      img.onerror = ()=> reject(new Error('SVG画像の読み込みに失敗'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  });
+}
+
+// シェア実行：Web Share API（画像ファイル対応）→ 非対応時はPNGダウンロード
+async function shareCard(entry){
+  if(!entry){ return; }
+  flashReg(t('sharePreparing'));
+  let blob;
+  try { blob = await renderCardBlob(entry); }
+  catch(e){ console.error('[onara] share render failed', e); flashReg(t('shareFailed')); return; }
+  flashReg('');
+  const fname = 'onara-radar.png';
+  const file = new File([blob], fname, { type:'image/png' });
+  const text = t('shareText', ANIMALS[((entry.noteIdx%12)+12)%12], typeLabel(entry.type)) + '\n' + 'https://' + SHARE_URL;
+  if (navigator.canShare && navigator.canShare({ files:[file] })){
+    try { await navigator.share({ files:[file], text }); return; }
+    catch(e){ if(e && e.name==='AbortError') return; console.warn('[onara] navigator.share failed, fallback to download', e); }
+  }
+  // フォールバック：ダウンロード
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
 document.getElementById('btn-dex-open').addEventListener('click', openDex);
 document.getElementById('dex-close').addEventListener('click', closeDex);
 document.getElementById('detail-close').addEventListener('click', closeDetail);
 document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
+document.getElementById('btn-share-result').addEventListener('click', ()=>{ if(lastScores) shareCard(scoreToEntry(lastScores)); });
+document.getElementById('btn-share-detail').addEventListener('click', ()=>{ if(detailEntry) shareCard(detailEntry); });
 document.getElementById('swap-yes').addEventListener('click', ()=>doSwap(true));
 document.getElementById('swap-no').addEventListener('click', ()=>doSwap(false));
 
