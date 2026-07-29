@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>屁音キャラ診断 — 試作v2</title>
+<title>おならレーダー</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,15 +14,28 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 16px 48px;
+    padding: 0;
     color: #1a1a1a;
   }
 
-  header { text-align: center; margin-bottom: 20px; }
-  .label-jp { font-size: 11px; letter-spacing: 0.15em; color: #888; margin-bottom: 4px; }
-  h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.05em; }
+  /* 共通ヘッダー（個体詳細の黒帯 .ov-head を正として全画面で共通化） */
+  .app-head {
+    position: sticky; top: 0; z-index: 20;
+    width: 100%;
+    background: #2a2a2a; color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+  }
+  .app-head .ah-left, .app-head .ah-right { flex: 0 0 88px; display: flex; align-items: center; }
+  .app-head .ah-right { justify-content: flex-end; }
+  .app-head .ah-title { flex: 1; text-align: center; font-size: 16px; font-weight: 700; letter-spacing: 0.04em; }
+  .ah-link { background: transparent; border: none; color: #cfc9c0; font-size: 14px; font-weight: 600; letter-spacing: 0.03em; cursor: pointer; padding: 0; }
+  .ah-link:active { color: #fff; }
 
-  /* ステータス表示 */
+  /* 本文（ヘッダー下のコンテンツ領域） */
+  .content { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 22px 16px 48px; }
+
+  /* ステータス表示（診断フロー中のみ表示。既定は非表示） */
   .status-bar {
     width: 100%;
     max-width: 360px;
@@ -34,6 +47,7 @@
     font-weight: 600;
     letter-spacing: 0.05em;
     transition: all 0.3s;
+    display: none;
   }
   .status-idle    { background: #e8e4de; color: #666; }
   .status-measure { background: #fff3cd; color: #856404; }
@@ -134,10 +148,14 @@
 </head>
 <body>
 
-<header>
-  <div class="label-jp" data-i18n="tagline"></div>
-  <h1 data-i18n="appTitle"></h1>
+<!-- 共通ヘッダー（左：ナビ｜中央：タイトル｜右：住人名簿リンク） -->
+<header class="app-head">
+  <div class="ah-left"></div>
+  <div class="ah-title" data-i18n="appTitle"></div>
+  <div class="ah-right"><button id="btn-dex-open" class="ah-link" data-i18n="dexOpen"></button></div>
 </header>
+
+<div class="content">
 
 <div class="status-bar status-idle" id="status" data-i18n="statusIdle"></div>
 
@@ -197,12 +215,9 @@
 
 <div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
 
-<!-- 住人名簿への導線 -->
-<button id="btn-dex-open" class="dex-fab" data-i18n="dexOpen"></button>
+</div><!-- /.content -->
 
 <style>
-  .dex-fab { position:fixed; top:12px; right:12px; z-index:20; background:#2a2a2a; color:#fff; border:none;
-    border-radius:20px; padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
   .overlay { position:fixed; inset:0; z-index:30; background:#f7f5f0; overflow-y:auto; display:none; }
   .overlay.show { display:block; }
   .ov-head { position:sticky; top:0; background:#2a2a2a; color:#fff; display:flex; align-items:center;
@@ -318,8 +333,7 @@ let LANG = 'ja';
 const STR = {
   ja: {
     // --- 静的UI（data-i18n で適用）---
-    docTitle:      '屁音キャラ診断 — 試作v2',
-    tagline:       '屁音キャラクター診断 試作v2',
+    docTitle:      'おならレーダー',
     appTitle:      'おならレーダー',
     btnStart:      '🎙 診断開始',
     levelLabel:    '入力レベル',
@@ -340,7 +354,7 @@ const STR = {
     btnRegister:   '記録する',
     btnShare:      '📤 シェア',
     btnReset:      'もう一度',
-    dexOpen:       '📖 住人名簿',
+    dexOpen:       '住人名簿 ›',
     dexClose:      '✕ 閉じる',
     dexTitle:      '住人名簿',
     detailBack:    '‹ 住人名簿',
@@ -439,10 +453,13 @@ const statusEl  = document.getElementById('status');
 const levelWrap = document.getElementById('level-wrap');
 const levelFill = document.getElementById('level-fill');
 
+// ステータス帯は診断フロー中だけ表示。setStatus で自動的に表示、hideStatus で隠す。
 function setStatus(msg, cls) {
   statusEl.textContent = msg;
   statusEl.className = 'status-bar ' + cls;
+  statusEl.style.display = 'block';
 }
+function hideStatus() { statusEl.style.display = 'none'; }
 
 // RMS→dB
 function rmsToDb(rms) {
@@ -814,9 +831,10 @@ btnStart.addEventListener('click', async () => {
 btnReset.addEventListener('click', () => {
   state = 'idle';
   btnStart.disabled = false;
+  btnStart.style.display = '';                              // アイドルに戻す：診断開始ボタンを再表示
   document.getElementById('result').style.display = 'none';
   document.getElementById('invalid-msg').style.display = 'none';
-  setStatus(t('statusIdle'), 'status-idle');
+  hideStatus();                                            // アイドル時はステータス帯を出さない
   drawRadarEmpty();
   drawMouseDefault();
 });
@@ -861,12 +879,13 @@ function displayResult(s) {
   document.getElementById('d-sharp').textContent  = s.sharp + ' pt';
   document.getElementById('d-stable').textContent = s.stable + ' %';
 
-  setStatus(t('statusDone'), 'status-done');
+  hideStatus();                                            // 結果表示中はステータス帯を出さない
   drawRadar(s);
   drawMouse(s);
   lastScores = s;                                          // 記録（住人名簿）用に保持
 
   document.getElementById('result').style.display = 'block';
+  btnStart.style.display = 'none';                          // 結果表示中は「診断開始」を最上部に置かない（もう一度は結果内にある）
   goPage(0);                                               // 1ページ目（諸元）から
   state = 'idle';
   btnStart.disabled = false;
