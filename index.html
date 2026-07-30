@@ -480,34 +480,26 @@ function setStatus(msg, cls) {
 }
 function hideStatus() { statusEl.style.display = 'none'; }
 
-// ===== 声紋モニタ（スペクトログラム readout）：黒×ベージュのモノクロ記録紙。台座・キャラとは別canvasの独立レイヤー。 =====
-// 横軸=時間（紙送りスクロール）／縦軸=周波数／濃淡=エネルギー強度。データ源は getFloatFrequencyData（FFT）1フレーム=1列。
-// SPEC は実機で詰める前提のチューニング値（濃淡・速度・帯域・解像度・記録面）。後から触りやすいよう1箇所に集約。
-const SPEC = {
-  COLS: 150,       // 時間解像度（横に流れる列数）
-  ROWS: 112,       // 周波数解像度（縦の分解能）
-  COL_MS: 45,      // 1列を刻む間隔[ms]（大きいほどゆっくり紙送り）
-  FREQ_MIN: 0,     // 縦軸 下端の周波数[Hz]
-  FREQ_MAX: 1400,  // 縦軸 上端の周波数[Hz]（声紋らしく見える帯域幅）
-  DB_FLOOR: -95,   // これ以下は無地（ベージュ）
-  DB_CEIL: -38,    // これ以上は最濃（黒インク）
-  GAMMA: 0.85,     // 濃淡カーブ（<1で中間を濃いめに）
-  SMOOTH: true,    // 記録面の補間（柔らかいインク調）
-  BODY_RED: '#b5352e',  // 本体区間の指摘マーカー（事務的な赤・細線のみ）
+// ===== 波形モニタ（対称バー readout）：iOSボイスメモ型。中央の水平線から上下対称に細い縦棒を積む。 =====
+// 横軸=時間（右端に最新バー→左へ紙送り）／棒の高さ=その時間窓の音量(RMS)。データ源は getFloatTimeDomainData。
+// WAVE は実機で詰める前提のチューニング値（太さ・間隔・時間窓・倍率・速度・記録面）。後から触りやすいよう1箇所に集約。
+const WAVE = {
+  BARS: 66,        // 画面に並ぶ棒の本数（横の密度）
+  BAR_MS: 55,      // 1本あたりの時間窓[ms]（スクロール速度＝大きいほどゆっくり）
+  GAIN: 5.0,       // 振幅(RMS)→高さの倍率
+  MIN_HALF: 1.4,   // 静音時の最小の棒（片側px＝点状）
+  BAR_RATIO: 0.5,  // スロット幅に対する棒の太さ比
+  BAR_MAXW: 3,     // 棒の最大太さ[px]
+  PAD_V: 6,        // 上下の余白[px]
+  INK: '#2a2a2a', BEIGE: '#f2efe8', BASE: '#d8d2c6', BODY_RED: '#b5352e',  // 赤は事務的な指摘マーカー
 };
 const Scope = (function () {
-  const BEIGE = [242, 239, 232], INK = [42, 42, 42];
   let canvas = null, ctx = null, dpr = 1, W = 0, H = 0, raf = null;
-  let buf = null, bctx = null, colImg = null;    // オフスクリーン記録面(COLS×ROWS)＋1列分ImageData
-  let getFreq = null, binHz = 1, mode = 'wait';
-  let whead = 0, totalCols = 0, lastColAt = 0;
-  let bodyStart = null, bodyEnd = null;           // 本体区間（列シーケンス番号で保持）
+  let getSamples = null, mode = 'wait';
+  let bars = null, whead = 0, totalCols = 0, lastAt = 0;
+  let bodyStart = null, bodyEnd = null;           // 本体区間（バーのシーケンス番号で保持）
   function ensure() {
-    if (!canvas) {
-      canvas = document.getElementById('scope'); ctx = canvas.getContext('2d');
-      buf = document.createElement('canvas'); buf.width = SPEC.COLS; buf.height = SPEC.ROWS;
-      bctx = buf.getContext('2d'); colImg = bctx.createImageData(1, SPEC.ROWS);
-    }
+    if (!canvas) { canvas = document.getElementById('scope'); ctx = canvas.getContext('2d'); bars = new Float32Array(WAVE.BARS); }
     dpr = window.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 320, cssH = canvas.clientHeight || 132;
     if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
@@ -515,65 +507,49 @@ const Scope = (function () {
     }
     W = cssW; H = cssH;
   }
-  function fillBeige(c, w, h) { c.fillStyle = `rgb(${BEIGE[0]},${BEIGE[1]},${BEIGE[2]})`; c.fillRect(0, 0, w, h); }
-  function pushColumn() {
-    const f = getFreq ? getFreq() : null;
-    const d = colImg.data, span = SPEC.FREQ_MAX - SPEC.FREQ_MIN;
-    for (let y = 0; y < SPEC.ROWS; y++) {
-      const freq = SPEC.FREQ_MAX - (y / (SPEC.ROWS - 1)) * span;   // 上端=高域, 下端=低域
-      let dens = 0;
-      if (f) {
-        const bin = Math.max(0, Math.min(f.length - 1, Math.round(freq / binHz)));
-        let t = (f[bin] - SPEC.DB_FLOOR) / (SPEC.DB_CEIL - SPEC.DB_FLOOR);
-        if (t < 0) t = 0; else if (t > 1) t = 1;
-        dens = Math.pow(t, SPEC.GAMMA);
-        if (mode !== 'rec') dens *= 0.5;   // 待機中は控えめ（ほぼ無地）
-      }
-      const o = y * 4;
-      d[o] = BEIGE[0] + (INK[0] - BEIGE[0]) * dens;
-      d[o + 1] = BEIGE[1] + (INK[1] - BEIGE[1]) * dens;
-      d[o + 2] = BEIGE[2] + (INK[2] - BEIGE[2]) * dens;
-      d[o + 3] = 255;
-    }
-    bctx.putImageData(colImg, whead, 0);
-    whead = (whead + 1) % SPEC.COLS;
-    totalCols++;
+  function pushBar() {
+    const s = getSamples ? getSamples() : null;
+    let v = 0;
+    if (s && s.length) { let sum = 0; for (let i = 0; i < s.length; i++) sum += s[i] * s[i]; v = Math.sqrt(sum / s.length) * WAVE.GAIN; if (v > 1) v = 1; }
+    bars[whead] = v; whead = (whead + 1) % WAVE.BARS; totalCols++;
   }
   function render() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = SPEC.SMOOTH;
-    // リングバッファを「古い→新しい＝左→右」で2枚に分けて拡大描画（紙送りスクロール）
-    const rightCols = SPEC.COLS - whead, wR = rightCols / SPEC.COLS * W;
-    ctx.drawImage(buf, whead, 0, rightCols, SPEC.ROWS, 0, 0, wR, H);
-    if (whead > 0) ctx.drawImage(buf, 0, 0, whead, SPEC.ROWS, wR, 0, whead / SPEC.COLS * W, H);
-    // 本体区間（onset〜offset）を時間軸に投影して赤枠でマーク
+    ctx.fillStyle = WAVE.BEIGE; ctx.fillRect(0, 0, W, H);
+    const cy = Math.round(H / 2), maxHalf = H / 2 - WAVE.PAD_V, slot = W / WAVE.BARS;
+    const barW = Math.max(1.2, Math.min(WAVE.BAR_MAXW, slot * WAVE.BAR_RATIO));
+    ctx.fillStyle = WAVE.BASE; ctx.fillRect(0, cy, W, 1);          // 中央の基準線
+    ctx.fillStyle = WAVE.INK;                                      // 黒の細い縦棒（離散・整然）
+    for (let sIdx = 0; sIdx < WAVE.BARS; sIdx++) {                 // 左=古い → 右=最新
+      const v = bars[(whead + sIdx) % WAVE.BARS];
+      const half = WAVE.MIN_HALF + v * (maxHalf - WAVE.MIN_HALF);
+      const x = Math.round(sIdx * slot + (slot - barW) / 2);
+      ctx.fillRect(x, cy - half, barW, half * 2);
+    }
+    // 本体区間（onset〜offset）を時間軸に投影して赤枠でマーク（細線のみ）
     if (bodyStart != null) {
-      const base = totalCols - SPEC.COLS;               // 画面左端に対応する列シーケンス
-      const sx = (bodyStart - base) / SPEC.COLS * W;
-      const ex = ((bodyEnd != null ? bodyEnd : totalCols) - base) / SPEC.COLS * W;
+      const base = totalCols - WAVE.BARS;
+      const sx = (bodyStart - base) / WAVE.BARS * W, ex = ((bodyEnd != null ? bodyEnd : totalCols) - base) / WAVE.BARS * W;
       const x0 = Math.max(1, Math.min(W - 1, sx)), x1 = Math.max(1, Math.min(W - 1, ex));
-      if (x1 - x0 >= 1) {
-        ctx.strokeStyle = SPEC.BODY_RED; ctx.lineWidth = 1.2;
-        ctx.strokeRect(x0 + 0.5, 3.5, (x1 - x0) - 1, H - 7);
-      }
+      if (x1 - x0 >= 1) { ctx.strokeStyle = WAVE.BODY_RED; ctx.lineWidth = 1.2; ctx.strokeRect(x0 + 0.5, 3.5, (x1 - x0) - 1, H - 7); }
     }
   }
   function loop(now) {
-    if (!lastColAt) lastColAt = now;
+    if (!lastAt) lastAt = now;
     let added = false, guard = 0;
-    while (now - lastColAt >= SPEC.COL_MS && guard < 3) { pushColumn(); lastColAt += SPEC.COL_MS; added = true; guard++; }
-    if (guard === 3) lastColAt = now;   // 大きな遅延時は追随して暴走を防ぐ
+    while (now - lastAt >= WAVE.BAR_MS && guard < 3) { pushBar(); lastAt += WAVE.BAR_MS; added = true; guard++; }
+    if (guard === 3) lastAt = now;   // 大きな遅延時は追随して暴走を防ぐ
     if (added) render();
     raf = requestAnimationFrame(loop);
   }
   return {
-    // start(getFreqFn, binHz, mode)  mode:'wait'|'rec'
-    start(freqFn, hz, m) {
+    // start(getSamplesFn, mode)  mode:'wait'|'rec'（現状 mode は表示切替に未使用だが将来用に保持）
+    start(samplesFn, m) {
       ensure();
-      getFreq = freqFn; binHz = hz || 1; mode = m || 'wait';
-      whead = 0; totalCols = 0; lastColAt = 0; bodyStart = null; bodyEnd = null;
-      fillBeige(bctx, SPEC.COLS, SPEC.ROWS);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); fillBeige(ctx, W, H);
+      getSamples = samplesFn; mode = m || 'wait';
+      whead = 0; totalCols = 0; lastAt = 0; bodyStart = null; bodyEnd = null;
+      for (let i = 0; i < WAVE.BARS; i++) bars[i] = 0;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = WAVE.BEIGE; ctx.fillRect(0, 0, W, H);
       document.getElementById('scope-wrap').classList.add('show');
       if (!raf) raf = requestAnimationFrame(loop);
     },
@@ -582,7 +558,7 @@ const Scope = (function () {
     endBody() { bodyEnd = totalCols; },                        // 本体offset（録音終了時）
     stop() {
       if (raf) { cancelAnimationFrame(raf); raf = null; }
-      getFreq = null; lastColAt = 0;
+      getSamples = null; lastAt = 0;
       const w = document.getElementById('scope-wrap'); if (w) w.classList.remove('show');
     }
   };
@@ -857,11 +833,10 @@ btnStart.addEventListener('click', async () => {
     setStatus(t('statusWaiting'), 'status-wait');
     levelFill.style.width = '0%';
     levelFill.style.background = '#2a9d8f';
-    // レベルバーを声紋モニタに格上げ（待機中は薄い記録面のみ、録音でFFTが刻まれる）
+    // レベルバーを対称バー波形モニタに格上げ（待機中は低い点状、録音でバーが刻まれる）
     levelWrap.style.display = 'none';
-    const freqBuf = new Float32Array(analyser.frequencyBinCount);
-    const specBinHz = audioCtx.sampleRate / analyser.fftSize;
-    Scope.start(() => { analyser.getFloatFrequencyData(freqBuf); return freqBuf; }, specBinHz, 'wait');
+    const waveBuf = new Float32Array(analyser.fftSize);
+    Scope.start(() => { analyser.getFloatTimeDomainData(waveBuf); return waveBuf; }, 'wait');
 
     // 録音バッファ
     const recordedSamples = [];
