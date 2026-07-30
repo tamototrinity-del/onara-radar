@@ -151,13 +151,15 @@
   .spec-key { color: #2e2e2e; font-weight: 600; }
   .spec-val { font-weight: 700; color: #1a1a1a; font-size: 16px; font-variant-numeric: tabular-nums; }
 
-  .invalid-msg {
+  /* すかし：検知できなかった時の一言。飾りなし・事務的・淡々と（枠や色は付けない） */
+  .sukashi-msg {
     width: 100%;
     max-width: 360px;
     text-align: center;
-    color: #a00;
-    font-size: 13px;
-    padding: 12px;
+    color: #8a8378;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    padding: 22px 12px;
     display: none;
   }
 </style>
@@ -185,7 +187,7 @@
 <!-- 波形モニタ（録音中の中央ゾーン。将来「舞台」に育てる独立レイヤー） -->
 <div class="scope-wrap" id="scope-wrap"><canvas id="scope"></canvas></div>
 
-<div class="invalid-msg" id="invalid-msg" data-i18n="invalidMsg"></div>
+<div class="sukashi-msg" id="sukashi-msg" data-i18n="sukashi"></div>
 
 <!-- 診断結果（3ページ分割） -->
 <div id="result" style="display:none; width:100%;">
@@ -356,7 +358,7 @@ const STR = {
     appTitle:      'おならレーダー',
     btnStart:      '🎙 診断開始',
     levelLabel:    '入力レベル',
-    invalidMsg:    '⚠ 有効な音が検出されませんでした。もう一度お試しください。',
+    sukashi:       'すかしましたね',
     noteCardLabel: '音階',
     specsTitle:    '診断諸元',
     specSize:      '大きさ',
@@ -434,7 +436,15 @@ const VALID_FREQ_MIN = 50;
 const VALID_FREQ_MAX = 200;
 const VALID_DUR_MIN  = 0.1;
 const VALID_DUR_MAX  = 10.0;   // 足切り上限（スコア正規化とは別）
-const NOISE_MARGIN_DB = 12;    // ノイズフロア+これ以上で本体（検出のみ。大きさスコアには使わない）
+const NOISE_MARGIN_DB = 12;    // （旧）ノイズフロア+これ以上で本体。現在は BODY.MARGIN_DB に置換（下記）
+
+// ===== 本体判定のしきい値（環境音で発火させないよう締める。実機調整前提で1箇所に集約）=====
+const BODY = {
+  MARGIN_DB:   20,    // ノイズフロア+この量[dB]を超えた音だけ本体候補（従来+12dB＝誤発火の主因を引き上げ）
+  MIN_DUR_SEC: 0.18,  // 本体の最短継続。これ未満は本体とみなさない（＝すかし）
+  CONFIRM_MS:  130,   // 検知→本体確定までの猶予。積算でこの時間 超過が続いたら確定して赤枠を出す
+  WAIT_MS:     8000,  // 待機の上限。この間に本体を検知できなければ すかし として終う
+};
 
 // ===== analyze-batch.js と一致させた確定チューニング値 =====
 // 大きさ：絶対dB(dBFS)。環境ノイズは差し引かない。-38/-12 も試せるよう定数化。
@@ -554,7 +564,7 @@ const Scope = (function () {
       if (!raf) raf = requestAnimationFrame(loop);
     },
     setMode(m) { mode = m; },
-    beginBody() { bodyStart = totalCols; bodyEnd = null; },   // 本体onset（検知時）
+    beginBody(backMs) { bodyStart = totalCols - Math.round((backMs || 0) / WAVE.BAR_MS); bodyEnd = null; },   // 確定時に本体先頭まで遡って左端を立てる
     endBody() { bodyEnd = totalCols; },                        // 本体offset（録音終了時）
     stop() {
       if (raf) { cancelAnimationFrame(raf); raf = null; }
@@ -668,10 +678,9 @@ function rmsRange(samples, from, to) {
   return Math.sqrt(s / Math.max(1, to - from));
 }
 
-// エンベロープ解析（analyze-batch.js と同一）。
-// 本体検出は 10ms RMSエンベロープ × ノイズフロア+12dB。環境音のノイズ山を除外する。
+// エンベロープ解析。本体検出は 10ms RMSエンベロープ × ノイズフロア+BODY.MARGIN_DB。環境音のノイズ山を除外する。
 function analyzeEnvelope(samples, sampleRate, noiseFloor) {
-  const threshold = noiseFloor * Math.pow(10, NOISE_MARGIN_DB / 20);
+  const threshold = noiseFloor * Math.pow(10, BODY.MARGIN_DB / 20);
   const win = Math.max(1, Math.floor(sampleRate * 0.01)); // 10ms
   const hop = Math.max(1, Math.floor(win / 2));
   let onsetIdx = -1, offsetIdx = -1;
@@ -717,7 +726,7 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
   if (!envelope) return null;
 
   const { duration, riseRate, wetRatio, onsetIdx, offsetIdx } = envelope;
-  if (duration < VALID_DUR_MIN || duration > VALID_DUR_MAX) return null;
+  if (duration < BODY.MIN_DUR_SEC || duration > VALID_DUR_MAX) return null;   // 短すぎ＝環境音/一過性→すかし
 
   // 大きさ（絶対dB評価・環境非依存）
   const rms = rmsRange(samples, onsetIdx, offsetIdx + 1);
@@ -790,7 +799,7 @@ btnStart.addEventListener('click', async () => {
   if (state !== 'idle') return;
   btnStart.disabled = true;
   document.getElementById('result').style.display = 'none';
-  document.getElementById('invalid-msg').style.display = 'none';
+  document.getElementById('sukashi-msg').style.display = 'none';
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -826,7 +835,8 @@ btnStart.addEventListener('click', async () => {
 
     const noiseRMS = noiseRMSList.reduce((s, x) => s + x, 0) / noiseRMSList.length;
     noiseFloorDb = rmsToDb(noiseRMS);
-    const threshold = noiseRMS * Math.pow(10, NOISE_MARGIN_DB / 20);
+    // 本体候補のしきい値＝ノイズフロア+BODY.MARGIN_DB（環境音・小音では超えない水準）
+    const bodyThreshold = noiseRMS * Math.pow(10, BODY.MARGIN_DB / 20);
 
     // ---- Phase 2: 待機 ----
     state = 'waiting';
@@ -847,50 +857,64 @@ btnStart.addEventListener('click', async () => {
     let peakSampleIndex = 0;       // 低周波エネルギー最大の瞬間のバッファ位置（YIN窓中心）
     let maxLowEnergy = -Infinity;  // 録音全体での低周波エネルギー最大値（代表フレーム選定用）
     let startTime = null;
+    let loudMs = 0;                 // しきい値超えの積算時間[ms]（確定猶予の判定用）
+    let bodyConfirmed = false;      // 本体として確定したか（＝赤枠を出したか）
+    let prevT = null;               // フレーム間の実経過[ms]を測る
+    const waitStart = Date.now();   // 待機開始（本体を検知できない時のタイムアウト起点）
 
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve) => {
       const loop = () => {
         if (state === 'idle') { resolve(); return; }
+        const now = Date.now();
+        const dt = (prevT == null) ? 16 : Math.min(100, now - prevT); prevT = now;
 
         analyser.getFloatTimeDomainData(timeData);
         analyser.getFloatFrequencyData(fftData);
 
         const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
-        const pct = Math.min(100, (rms / threshold) * 60);
+        const pct = Math.min(100, (rms / bodyThreshold) * 60);
         levelFill.style.width = pct + '%';
 
         if (!isRecording) {
-          if (rms > threshold) {
-            // 検知
+          if (rms > bodyThreshold) {
+            // 本体候補を検知（録音は開始するが、赤枠＝本体確定はまだ出さない）
             isRecording = true;
             state = 'recording';
-            startTime = Date.now();
+            startTime = now;
             setStatus(t('statusRecording'), 'status-rec');
             Scope.setMode('rec');
-            Scope.beginBody();   // 本体onset：声紋に赤枠の左端を立てる
             recordedSamples.push(...timeData);
-            // 代表フレーム（低周波エネルギー最大）の初期化
             maxLowEnergy = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
             fftSnapshot = fftData.slice();
             peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
+            loudMs = dt;
+          } else if (now - waitStart > BODY.WAIT_MS) {
+            // 一定時間 本体を検知できなかった＝すかし（recordedSamples 空のまま終う）
+            resolve(); return;
           }
         } else {
           recordedSamples.push(...timeData);
-          // 録音全体で低周波エネルギーが最大の瞬間を代表フレームとして採用（基音・重厚感はここから確定）
           const le = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
           if (le > maxLowEnergy) {
             maxLowEnergy = le;
             fftSnapshot = fftData.slice();
             peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
           }
-          if (rms < threshold * 0.6) {
+          // 確定猶予：しきい値超えが積算 CONFIRM_MS 続いたら本体確定→赤枠（環境音・一過性は継続せず落ちる）
+          if (rms > bodyThreshold) {
+            loudMs += dt;
+            if (!bodyConfirmed && loudMs >= BODY.CONFIRM_MS) {
+              bodyConfirmed = true;
+              Scope.beginBody(loudMs);   // 確定してから、本体先頭まで遡って赤枠を立てる
+            }
+          }
+          if (rms < bodyThreshold * 0.6) {
             silenceFrames++;
             if (silenceFrames > SILENCE_FRAMES) { resolve(); return; }
           } else {
             silenceFrames = 0;
           }
-          // 上限10秒
-          if (Date.now() - startTime > 10000) { resolve(); return; }
+          if (now - startTime > 10000) { resolve(); return; }   // 上限10秒
         }
         requestAnimationFrame(loop);
       };
@@ -907,8 +931,8 @@ btnStart.addEventListener('click', async () => {
     Scope.stop();
 
     if (recordedSamples.length === 0) {
-      setStatus(t('errNoSound'), 'status-error');
-      document.getElementById('invalid-msg').style.display = 'block';
+      hideStatus();   // 本体を検知できなかった＝すかし（エラー扱いにしない・帯は出さない）
+      document.getElementById('sukashi-msg').style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
       return;
@@ -922,8 +946,8 @@ btnStart.addEventListener('click', async () => {
     );
 
     if (!scores) {
-      setStatus(t('errNoFart'), 'status-error');
-      document.getElementById('invalid-msg').style.display = 'block';
+      hideStatus();   // 本体条件（音量/最短継続）を満たさない＝すかし
+      document.getElementById('sukashi-msg').style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
       return;
@@ -945,7 +969,7 @@ btnReset.addEventListener('click', () => {
   btnStart.disabled = false;
   btnStart.style.display = '';                              // アイドルに戻す：診断開始ボタンを再表示
   document.getElementById('result').style.display = 'none';
-  document.getElementById('invalid-msg').style.display = 'none';
+  document.getElementById('sukashi-msg').style.display = 'none';
   Scope.stop();
   hideStatus();                                            // アイドル時はステータス帯を出さない
   drawRadarEmpty();
