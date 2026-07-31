@@ -441,9 +441,10 @@ const NOISE_MARGIN_DB = 12;    // （旧）ノイズフロア+これ以上で本
 // ===== 本体判定のしきい値（環境音で発火させないよう締める。実機調整前提で1箇所に集約）=====
 const BODY = {
   MARGIN_DB:   20,    // ノイズフロア+この量[dB]を超えた音だけ本体候補（従来+12dB＝誤発火の主因を引き上げ）
-  MIN_DUR_SEC: 0.18,  // 本体の最短継続。これ未満は本体とみなさない（＝すかし）
+  MIN_DUR_SEC: 0.18,  // 本体の最短継続。これ未満は本体とみなさない（→候補は破棄して待機継続）
   CONFIRM_MS:  130,   // 検知→本体確定までの猶予。積算でこの時間 超過が続いたら確定して赤枠を出す
-  WAIT_MS:     12000, // 待機の上限。この間に本体を検知できなければ すかし（構えてから出すまでの生理的ラグを吸収）
+  SILENCE_MS:  800,   // 録音中の無音がこの実時間[ms]続いたら候補を締める（フレーム数非依存。出だし→間→本体を1回に収める長さ）
+  WAIT_MS:     8000,  // 「診断開始」から本体を確定できない場合に すかし とするまでの上限[ms]（体感で確定・据え置き）
 };
 
 // ===== analyze-batch.js と一致させた確定チューニング値 =====
@@ -566,6 +567,7 @@ const Scope = (function () {
     setMode(m) { mode = m; },
     beginBody(backMs) { bodyStart = totalCols - Math.round((backMs || 0) / WAVE.BAR_MS); bodyEnd = null; },   // 確定時に本体先頭まで遡って左端を立てる
     endBody() { bodyEnd = totalCols; },                        // 本体offset（録音終了時）
+    resetBody() { bodyStart = null; bodyEnd = null; },         // 候補破棄時に赤枠を消す（待機に戻す）
     stop() {
       if (raf) { cancelAnimationFrame(raf); raf = null; }
       getSamples = null; lastAt = 0;
@@ -848,21 +850,38 @@ btnStart.addEventListener('click', async () => {
     const waveBuf = new Float32Array(analyser.fftSize);
     Scope.start(() => { analyser.getFloatTimeDomainData(waveBuf); return waveBuf; }, 'wait');
 
-    // 録音バッファ
-    const recordedSamples = [];
+    // 録音バッファ（1セッション内で候補は複数回立ちうる：無効な候補は破棄して WAIT_MS まで本体を待つ）
+    let recordedSamples = [];
     let isRecording = false;
-    let silenceFrames = 0;
-    const SILENCE_FRAMES = 20; // 無音継続フレーム数で終了
+    let silentMs = 0;              // 無音の実経過[ms]（フレーム数非依存）
     let fftSnapshot = null;
     let peakSampleIndex = 0;       // 低周波エネルギー最大の瞬間のバッファ位置（YIN窓中心）
     let maxLowEnergy = -Infinity;  // 録音全体での低周波エネルギー最大値（代表フレーム選定用）
     let startTime = null;
-    let loudMs = 0;                 // しきい値超えの積算時間[ms]（確定猶予の判定用）
-    let bodyConfirmed = false;      // 本体として確定したか（＝赤枠を出したか）
-    let prevT = null;               // フレーム間の実経過[ms]を測る
-    const waitStart = Date.now();   // 待機開始（本体を検知できない時のタイムアウト起点）
+    let loudMs = 0;                // しきい値超えの積算時間[ms]（確定猶予の判定用）
+    let bodyConfirmed = false;     // 本体として確定したか（＝赤枠を出したか）
+    let prevT = null;              // フレーム間の実経過[ms]
+    let sessionScores = null;      // 有効な本体が録れたらここに入る（null のまま終わればすかし）
+    const waitStart = Date.now();  // 「診断開始」→本体確定の制限時間 起点
+
+    // 候補を待機に戻す（未達で締めたとき。セッションは終わらせず本体を待ち続ける）
+    const resetCandidate = () => {
+      isRecording = false; state = 'waiting';
+      recordedSamples = [];
+      silentMs = 0; loudMs = 0; bodyConfirmed = false;
+      maxLowEnergy = -Infinity; fftSnapshot = null; peakSampleIndex = 0; startTime = null;
+      setStatus(t('statusWaiting'), 'status-wait');
+      Scope.setMode('wait'); Scope.resetBody();   // 赤枠を消す
+    };
 
     await new Promise((resolve) => {
+      // 候補の録音を締めて本体判定。有効→成功(resolve)、無効→待機へ戻す。戻り値: 成功したか
+      const finishCandidate = () => {
+        const s = calcScores(new Float32Array(recordedSamples), audioCtx.sampleRate, fftSnapshot || fftData, peakSampleIndex);
+        if (s) { sessionScores = s; resolve(); return true; }
+        resetCandidate();   // 本体条件未達＝すかしにせず待機継続
+        return false;
+      };
       const loop = () => {
         if (state === 'idle') { resolve(); return; }
         const now = Date.now();
@@ -872,12 +891,11 @@ btnStart.addEventListener('click', async () => {
         analyser.getFloatFrequencyData(fftData);
 
         const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
-        const pct = Math.min(100, (rms / bodyThreshold) * 60);
-        levelFill.style.width = pct + '%';
+        levelFill.style.width = Math.min(100, (rms / bodyThreshold) * 60) + '%';
 
         if (!isRecording) {
           if (rms > bodyThreshold) {
-            // 本体候補を検知（録音は開始するが、赤枠＝本体確定はまだ出さない）
+            // 本体候補を検知（録音開始。赤枠＝本体確定はまだ出さない）
             isRecording = true;
             state = 'recording';
             startTime = now;
@@ -887,10 +905,9 @@ btnStart.addEventListener('click', async () => {
             maxLowEnergy = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
             fftSnapshot = fftData.slice();
             peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
-            loudMs = dt;
+            loudMs = dt; silentMs = 0;
           } else if (now - waitStart > BODY.WAIT_MS) {
-            // 一定時間 本体を検知できなかった＝すかし（recordedSamples 空のまま終う）
-            resolve(); return;
+            resolve(); return;   // 制限時間内に有効な本体なし＝すかし
           }
         } else {
           recordedSamples.push(...timeData);
@@ -900,21 +917,21 @@ btnStart.addEventListener('click', async () => {
             fftSnapshot = fftData.slice();
             peakSampleIndex = recordedSamples.length - Math.floor(analyser.fftSize / 2);
           }
-          // 確定猶予：しきい値超えが積算 CONFIRM_MS 続いたら本体確定→赤枠（環境音・一過性は継続せず落ちる）
           if (rms > bodyThreshold) {
-            loudMs += dt;
+            // 確定猶予：しきい値超えが積算 CONFIRM_MS 続いたら本体確定→赤枠
+            loudMs += dt; silentMs = 0;
             if (!bodyConfirmed && loudMs >= BODY.CONFIRM_MS) {
               bodyConfirmed = true;
-              Scope.beginBody(loudMs);   // 確定してから、本体先頭まで遡って赤枠を立てる
+              Scope.beginBody(loudMs);   // 確定してから本体先頭まで遡って囲う
             }
-          }
-          if (rms < bodyThreshold * 0.6) {
-            silenceFrames++;
-            if (silenceFrames > SILENCE_FRAMES) { resolve(); return; }
+          } else if (rms < bodyThreshold * 0.6) {
+            // 無音が SILENCE_MS 続いたら候補を締めて判定（有効:成功／無効:待機へ戻る）
+            silentMs += dt;
+            if (silentMs > BODY.SILENCE_MS) { if (finishCandidate()) return; requestAnimationFrame(loop); return; }
           } else {
-            silenceFrames = 0;
+            silentMs = 0;   // グレーゾーン(0.6×〜1×)は無音に数えない
           }
-          if (now - startTime > 10000) { resolve(); return; }   // 上限10秒
+          if (now - startTime > 10000) { if (finishCandidate()) return; requestAnimationFrame(loop); return; }   // 単一候補の上限10秒
         }
         requestAnimationFrame(loop);
       };
@@ -922,31 +939,15 @@ btnStart.addEventListener('click', async () => {
     });
 
     state = 'done';
-    setStatus(t('statusAnalyzing'), 'status-measure');
-    Scope.endBody();   // 本体offset：赤枠の右端を確定
+    Scope.endBody();
 
     // クリーンアップ
     stream.getTracks().forEach(t => t.stop());
     levelWrap.style.display = 'none';
     Scope.stop();
 
-    if (recordedSamples.length === 0) {
-      hideStatus();   // 本体を検知できなかった＝すかし（エラー扱いにしない・帯は出さない）
-      document.getElementById('sukashi-msg').style.display = 'block';
-      state = 'idle';
-      btnStart.disabled = false;
-      return;
-    }
-
-    const scores = calcScores(
-      new Float32Array(recordedSamples),
-      audioCtx.sampleRate,
-      fftSnapshot || fftData,
-      peakSampleIndex
-    );
-
-    if (!scores) {
-      hideStatus();   // 本体条件（音量/最短継続）を満たさない＝すかし
+    if (!sessionScores) {
+      hideStatus();   // WAIT_MS 内に有効な本体を確定できなかった＝すかし（帯もエラーも出さない）
       document.getElementById('sukashi-msg').style.display = 'block';
       state = 'idle';
       btnStart.disabled = false;
@@ -954,7 +955,7 @@ btnStart.addEventListener('click', async () => {
     }
 
     // 表示
-    displayResult(scores);
+    displayResult(sessionScores);
 
   } catch (e) {
     setStatus(t('errMicDenied'), 'status-error');
