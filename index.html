@@ -32,8 +32,8 @@
   .ah-link { background: transparent; border: none; color: #cfc9c0; font-size: 14px; font-weight: 600; letter-spacing: 0.03em; cursor: pointer; padding: 0; }
   .ah-link:active { color: #fff; }
 
-  /* 本文（ヘッダー下のコンテンツ領域） */
-  .content { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 22px 16px 48px; }
+  /* 本文（ヘッダー下のコンテンツ領域）。ヘッダー下の残り高さいっぱいに広げ、待機時は下の空白を分散する */
+  .content { width: 100%; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; padding: 22px 16px 48px; }
 
   /* ステータス表示（診断フロー中のみ表示。既定は非表示） */
   .status-bar {
@@ -152,9 +152,10 @@
   .spec-val { font-weight: 700; color: #1a1a1a; font-size: 16px; font-variant-numeric: tabular-nums; }
 
   /* マスコット「ポフ」：待機画面（入口）のみ。控えめな浮遊。診断中・結果・名簿・詳細には出さない。 */
-  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 22px; }
-  .pofu-lead { font-size: 13px; color: #a89f92; letter-spacing: 0.08em; margin-bottom: 10px; }
-  .pofu-img { width: 168px; height: auto; display: block; animation: pofu-float 3.6s ease-in-out infinite; }
+  /* margin:auto で残り高さの中央へ（診断開始ボタンは上のまま／下だけ空くのを解消）。ポフは待機の主役として大きめ。 */
+  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin: auto 0; }
+  .pofu-lead { font-size: 14px; color: #a89f92; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .pofu-img { width: 220px; height: auto; display: block; animation: pofu-float 3.6s ease-in-out infinite; }
   @keyframes pofu-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
   @media (prefers-reduced-motion: reduce) { .pofu-img { animation: none; } }
 
