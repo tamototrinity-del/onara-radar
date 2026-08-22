@@ -1100,15 +1100,35 @@ function ensureSpecies(zi, cb) {
   s.onerror = () => cb(new Error('trace data load failed: ' + key));
   document.head.appendChild(s);
 }
-// 任意のsvg要素へキャラ描画（干支データ動的ロード込み）。住人名簿グリッド/詳細/入替でも使う。
+// キャラのSVGマークアップをPNGにラスタライズして返す（iOS SafariのインラインSVGフィルタ合成ペイント
+// 不具合を根本回避するため、1282本のインラインパス＋フィルタを描かず、静止画1枚にして表示する）。
+const CHARA_RASTER = 420;   // ラスタライズ解像度[px]（viewBox 200 を表現。詳細210/グリッド~100 いずれも十分）
+function rasterizeChara(inner, cb) {
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200" width="${CHARA_RASTER}" height="${CHARA_RASTER}">${inner}</svg>`;
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = CHARA_RASTER; c.height = CHARA_RASTER;
+      c.getContext('2d').drawImage(img, 0, 0, CHARA_RASTER, CHARA_RASTER);
+      cb(c.toDataURL('image/png'));
+    } catch (e) { cb(null); }
+  };
+  img.onerror = () => cb(null);
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+}
+// 任意のsvg要素へキャラ描画（干支データ動的ロード込み）。住人名簿グリッド/詳細/入替/結果でも使う。
+// 生成したキャラSVGを画像化し、対象<svg>内に <image> 1枚として差し込む（インラインパス群は使わない）。
 function renderCharaInto(svg, v, uid) {
   const zi = (v.noteIdx != null) ? v.noteIdx : 0;
   ensureSpecies(zi, function (err) {
-    if (!err && window.CharaTrace) {
-      const out = CharaTrace.charaTraceSVG(v, zi, uid || 'c');
-      if (out) { svg.innerHTML = out; return; }
-    }
-    if (window.Chara) svg.innerHTML = Chara.charaSVG(v, zi, uid || 'c');
+    let inner = '';
+    if (!err && window.CharaTrace) inner = CharaTrace.charaTraceSVG(v, zi, uid || 'c') || '';
+    if (!inner && window.Chara) inner = Chara.charaSVG(v, zi, uid || 'c');
+    if (!inner) return;
+    rasterizeChara(inner, function (png) {
+      if (png) svg.innerHTML = `<image x="-100" y="-100" width="200" height="200" href="${png}"/>`;
+      else svg.innerHTML = inner;   // ラスタライズ失敗時のみインライン描画にフォールバック
+    });
   });
 }
 function drawMouse(v) {
