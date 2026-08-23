@@ -152,8 +152,10 @@
   .spec-val { font-weight: 700; color: #1a1a1a; font-size: 16px; font-variant-numeric: tabular-nums; }
 
   /* マスコット「ポフ」：待機画面（入口）のみ。控えめな浮遊。診断中・結果・名簿・詳細には出さない。 */
-  /* margin:auto で残り高さの中央へ（診断開始ボタンは上のまま／下だけ空くのを解消）。ポフは待機の主役として大きめ。 */
-  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin: auto 0; }
+  /* 待機画面の縦配置: ヘッダー直下は空ける(margin-top:auto)→文言+ポフ→(下に)ボタン→お知らせ予約枠→下部余白。 */
+  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin: auto 0 24px; }   /* 上=ヘッダー直下の空き / 下=ボタンとの間隔 */
+  /* お知らせ予約領域: ボタン下に確保する将来のお知らせ枠。下=auto余白で最下部ベタ付けを避け縦バランスを取る。 */
+  .notice-reserve { width: 100%; max-width: 360px; min-height: 72px; margin: 8px 0 auto; }
   .pofu-lead { font-size: 14px; color: #a89f92; letter-spacing: 0.08em; margin-bottom: 12px; }
   .pofu-img { width: 220px; height: auto; display: block; animation: pofu-float 3.6s ease-in-out infinite; }
   @keyframes pofu-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
@@ -185,13 +187,14 @@
 
 <div class="status-bar status-idle" id="status" data-i18n="statusIdle"></div>
 
-<button class="btn btn-start" id="btn-start" data-i18n="btnStart"></button>
-
-<!-- 案内役マスコット「ポフ」：待機画面のみ（診断中・結果・名簿・詳細では隠す） -->
+<!-- 案内役マスコット「ポフ」：待機画面のみ（診断中・結果・名簿・詳細では隠す）。文言→ポフ→ボタンの導線 -->
 <div class="pofu-wrap" id="pofu">
   <div class="pofu-lead" data-i18n="pofuLead"></div>
   <img class="pofu-img" src="pofu.png" width="304" height="266" alt="ポフ">
 </div>
+
+<!-- 診断開始ボタン：文言・ポフの視線の先（下）に配置 -->
+<button class="btn btn-start" id="btn-start" data-i18n="btnStart"></button>
 
 <div class="level-wrap" id="level-wrap">
   <div class="level-label" data-i18n="levelLabel"></div>
@@ -247,6 +250,11 @@
   <div class="dots" id="dots"><span></span><span></span><span></span></div>
   <button class="btn btn-reset" id="btn-reset" data-i18n="btnReset" style="margin-top:4px;"></button>
 </div>
+
+<!-- ===== お知らせ予約領域 =====
+     診断開始ボタンの下に確保した将来の「お知らせ」表示スペース（新シーズン告知／アップデート／イベント等）。
+     今は機能未実装・空のまま。将来ここに #notice の中身を差し込む（この位置＝待機画面のボタン下）。 -->
+<div class="notice-reserve" id="notice-reserve" aria-hidden="true"></div>
 
 <div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
 
