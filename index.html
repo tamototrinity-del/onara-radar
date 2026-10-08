@@ -1701,7 +1701,7 @@ const TICKETS_KEY = 'onara.tickets';
 const TICKET_FREE_MAX = 10;     // free の上限
 const TICKET_WELCOME_FREE = 3;  // チュートリアル完了時に渡す枚数
 const PURCHASE_ENABLED = true;  // 初回リリースから購入あり。ただし［購入する］はネイティブから products を受信済みのときだけ表示
-const TICKET_PRODUCT_ID = 'tickets_3';  // ASC 消耗型「チケット3枚」¥100（価格はダイアログに出さず Apple の購入シートに任せる）
+const TICKET_PRODUCT_ID = 'com.fookear.pofu.tickets_3';  // 新 ASC 記録の消耗型「チケット3枚」¥100。ネイティブ App.js と同じ文字列（価格はダイアログに出さず Apple の購入シートに任せる）
 const TICKET_TXN_KEEP = 50;             // 処理済み transactionId の保持数（冪等化用・直近50件）
 
 window.OnaraTickets = (function () {
