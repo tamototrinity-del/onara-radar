@@ -98,7 +98,10 @@
     // にじみは中間(50)超の分だけランプ＝乾〜普通はくっきり、湿った個体だけにじむ（輪郭の不要なボケ回避）
     const wetT = (v.wet - 50) / 50, blur = Math.max(0, (v.wet - 50) / 50) * 2.2;
     let cm = null;
-    if (wetT > 0) cm = `${1-0.28*wetT} 0 0 0 0  0 ${1-0.09*wetT} 0 0 ${0.02*wetT}  0 0 1 0 ${0.09*wetT}  0 0 0 1 0`;
+    // 湿り側の色調は上限を置く（2026-10-01）。旧係数 R×0.72/G×0.91+0.02/B+0.09 では wet=100 で
+    // ドレスの桃 #F7C7CE→#B2BAE5（色相351→230）、ティアラの金 #F8E19E→#B3D2B5（45→125）と衣装の色が飛んだ。
+    // 1/3 に縮めると桃→#E1C3D6（322）、金→#E2DCA6（54）で判別できる。ぼかしはそのまま。
+    if (wetT > 0) cm = `${1-0.09*wetT} 0 0 0 0  0 ${1-0.03*wetT} 0 0 ${0.007*wetT}  0 0 1 0 ${0.03*wetT}  0 0 0 1 0`;
     else if (wetT < 0) { const t=-wetT; cm = `1 0 0 0 ${0.035*t}  0 ${1-0.02*t} 0 0 ${0.008*t}  0 0 ${1-0.10*t} 0 0  0 0 0 1 0`; }
     const fid = 'tf_' + uid;
     const filter = (blur > 0.4 || cm) ? `<filter id="${fid}" x="-20%" y="-20%" width="140%" height="140%">${blur>0.4?`<feGaussianBlur stdDeviation="${blur.toFixed(2)}"/>`:''}${cm?`<feColorMatrix type="matrix" values="${cm}"/>`:''}</filter>` : '';

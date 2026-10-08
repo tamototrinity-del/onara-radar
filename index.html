@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-brand="onara"><!-- 看板の切替。Web 版（GitHub Pages）は onara。www ビルド（scripts/build-www.js）が pofu に書き換える -->
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>おならレーダー</title>
 <!-- iOSホーム画面追加時のアイコン（アプリアイコン清書版・ポフ） -->
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -10,8 +10,26 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* 待機画面の書体。Zen Maru Gothic Bold を使用文字40字だけに絞った同梱サブセット（7.5KB／SIL OFL 1.1）。
+     含まれない文字は既定の角ゴシックへ落ちるので、この書体を当てるのは文言が固定の箇所に限る。 */
+  @font-face {
+    font-family: 'Zen Maru Gothic Sub';
+    src: url('zen-maru-gothic-bold-subset.woff2') format('woff2');
+    font-weight: 700; font-style: normal; font-display: swap;
+  }
+
+  /* 帯なし化（2026-10-07）：WebView が画面の上端〜下端まで広がる。ステータスバー／ホームバーの帯は
+     env(safe-area-inset-*) で確保する。変数に逃がしてあるのは Chromium の描画確認で値を差し替えるため。 */
+  :root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
   body {
-    background: #f7f5f0;
+    /* 診断中（環境ノイズ計測中・録音中）の背景。待機画面の sky-bg.jpg からロゴ・文字・泡・シルエットを
+       抜いた絵。敷き方は body.sky とまったく同じ（center center / cover）にして雲の位置を合わせる。
+       2層目のグラデーションは画像が読めるまでの下地。 */
+    background:
+      url('sky-plain.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%);
+    /* background-attachment: fixed は削除（2026-09-20）。iOS 実機で計測中・録音中の画面に
+       ヘッダーと文字の二重描画が出たため。min-height:100vh があるので見た目は変わらない見込み。 */
     font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
     min-height: 100vh;
     display: flex;
@@ -27,7 +45,7 @@
     width: 100%;
     background: #2a2a2a; color: #fff;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px;
+    padding: calc(12px + var(--sat)) 16px 12px;   /* 黒帯はステータスバーの下まで伸びる */
   }
   .app-head .ah-left, .app-head .ah-right { flex: 0 0 88px; display: flex; align-items: center; }
   .app-head .ah-right { justify-content: flex-end; }
@@ -36,7 +54,7 @@
   .ah-link:active { color: #fff; }
 
   /* 本文（ヘッダー下のコンテンツ領域）。ヘッダー下の残り高さいっぱいに広げ、待機時は下の空白を分散する */
-  .content { width: 100%; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; padding: 22px 16px 48px; }
+  .content { width: 100%; flex: 1 0 auto; display: flex; flex-direction: column; align-items: center; padding: 22px 16px calc(48px + var(--sab)); }
 
   /* ステータス表示（診断フロー中のみ表示。既定は非表示） */
   .status-bar {
@@ -49,8 +67,16 @@
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.05em;
+    max-height: 120px;
+    overflow: hidden;
     transition: all 0.3s;
     display: none;
+  }
+  /* 録音が始まったら帯は畳む。display:none で消すと波形が一段跳ね上がるので、
+     高さ・余白・不透明度を 0 へ寄せて詰める（トランジションで吸収する）。
+     見るべき場所を「録音中 ●」と波形の1箇所に絞るための処理。 */
+  .status-bar.is-collapsed {
+    max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; opacity: 0;
   }
   .status-idle    { background: #e8e4de; color: #666; }
   .status-measure { background: #fff3cd; color: #856404; }
@@ -78,8 +104,55 @@
     transition: all 0.15s;
     letter-spacing: 0.05em;
   }
-  .btn-start { background: #2a2a2a; color: #fff; }
+  /* 青は待機画面と診断中だけ。結果1〜3ページはクリームへ戻す（名簿・詳細・ダイアログは .overlay 側で元からクリーム） */
+  body.bg-cream { background: #f9f5f2; }
+
+  /* ===== 待機画面：背景版 sky-bg.jpg（852x1846）。ロゴ・雲・泡・「？」シルエット・添え文は絵に焼き込み済み =====
+     ポフとボタンは泡に合わせる必要があるので、背景の cover 拡大に追随させる。
+     852x1846 は縦横比 0.4615 で、幅が基準になる（一般的なiPhoneは 0.461〜0.462）。
+     原画座標 designY の画面上の位置は  designY/8.52 vw − 108.3333vw + 50vh。
+     ＝ designY×(100vw/852) − (画像の表示高さ − 画面高)/2。これで端末比が変わっても泡と一緒に動く。 */
+  body.sky {
+    background:
+      url('sky-bg.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%);
+  }
+  body.sky .pofu-lead { display: none; }                      /* 「ポフの友だちを見つけよう」は絵に入っている */
+  body.sky .pofu-wrap { position: fixed; margin: 0; z-index: 1;
+    left: 10.417vw; top: calc(-32.007vw + 50vh); width: 83.03vw; }   /* 原画 x88.75 / y650.3 / 幅707.4 */
+  body.sky .pofu-frame { height: auto; overflow: visible; }   /* 足元はボタンと泡が隠すので額縁のクリップは使わない */
+  body.sky .pofu-img { width: 100%; height: auto; }
+  body.sky #btn-start { position: fixed; z-index: 2; margin: 0;
+    left: 8.157vw; top: calc(34.742vw + 50vh); width: 83.92vw; max-width: none; height: 17.371vw; }   /* 原画 x69.5 / y1219 / 715x148 */
+  body.sky .notice-reserve { position: fixed; z-index: 2; left: 0; right: 0; width: auto; max-width: none;
+    top: calc(57.160vw + 50vh); margin: 0; min-height: 0; }   /* ボタンの下 原画 y1410 */
+
+  /* 診断開始：立体（2026-09-20）。新原画が立体になったため平面縛りを解除。色は設計図の実測値。
+     アイコンは擬似要素の背景画像にした。data-i18n が textContent を書き換えても消えないため。 */
+  .btn-start {
+    background: linear-gradient(180deg, #FEE871 0%, #FFD241 22%, #FFBD29 56%, #FDB523 80%, #FDC333 100%);
+    color: #fff; font-size: 18px; position: relative; z-index: 2; border-radius: 999px;
+    box-shadow: inset 0 -3px 0 rgba(243,141,13,0.95), 0 4px 10px rgba(16,60,110,0.28);
+    text-shadow: 0 1px 2px rgba(190,110,10,0.45);
+  }
+  .btn-start::before, .btn-start::after {
+    content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+    background-repeat: no-repeat; background-position: center; background-size: contain;
+  }
+  /* マイク＋音の波 */
+  .btn-start::before { left: 7%; width: 30px; height: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round'%3E%3Crect x='9.4' y='2.6' width='5.2' height='10.2' rx='2.6' fill='%23fff' stroke='none'/%3E%3Cpath d='M6.6 11.2a5.4 5.4 0 0 0 10.8 0'/%3E%3Cpath d='M12 16.6v3.1M9.2 19.7h5.6'/%3E%3Cpath d='M3.6 8.8a3.2 3.2 0 0 0 0 4.9M20.4 8.8a3.2 3.2 0 0 1 0 4.9'/%3E%3C/svg%3E"); }
+  /* 右向き矢印 */
+  .btn-start::after { right: 7%; width: 22px; height: 22px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4.5l7.5 7.5L9 19.5'/%3E%3C/svg%3E"); }
   .btn-start:active { transform: scale(0.97); }
+  /* 診断中は「診断開始」を消して、同じ場所に状態表示を置く（押せないボタンを残さない）。高さはボタンと同じ54px */
+  /* 文字は白のまま。影・カプセル（下地）は付けない（2026-09-21 指示） */
+  .rec-indicator { display: none; width: 100%; max-width: 360px; min-height: 54px; margin-bottom: 16px;
+    align-items: center; justify-content: center; font-size: 18px; font-weight: 700; letter-spacing: 0.08em;
+    color: #fff; }
+  .rec-indicator.on { display: flex; }
+  .rec-indicator.on:not(:empty) { animation: pulse 1.6s ease-in-out infinite; }
   .btn-reset { background: #e8e4de; color: #444; font-size: 13px; padding: 10px; }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -90,11 +163,13 @@
     margin-bottom: 16px;
     display: none;
   }
-  .level-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .level-label { font-size: 11px; color: #1B3A5C; margin-bottom: 4px; }   /* 濃紺。青地で #888 が埋もれていた */
   .level-bar-bg {
     width: 100%;
     height: 8px;
-    background: #ddd;
+    /* 下地は濃紺 #1B3A5C の半透明。#ddd は青空の上で白っぽく浮いてバーの範囲が読めなかった（2026-09-21）。
+       0.6 は「空との差」と「充填部との差」が釣り合う値（空 2.44 : 充填 2.46）。濃くすると充填が沈む。 */
+    background: rgba(27, 58, 92, 0.6);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -121,6 +196,26 @@
     background: #f2efe8;
     border: 1px solid #e2ddd3;
   }
+
+  /* ===== 診断中（環境ノイズ計測中・録音中）の配置：左上の雲のすぐ下に寄せる =====
+     待機画面でポフがいた高さの近くに波形を出し、ボタン→波形の視線移動を短くする。
+     物差しは背景版の左上の雲の下端＝原画 y555（375幅で画面 y244.0）。その 10px 下が箱の上端。
+     位置はポフ・ボタンと同じ背景連動の式（designY/8.52vw − 108.3333vw + 50vh）で指定する。
+       波形・入力レベル  原画 y555 ＋10px → calc(-40.526vw + 50vh)   （375幅で 254.0）
+       状態表示・帯      その上（箱の上端 −12px −状態表示の高さ54px）→ 同式 −66px （375幅で 188.0）
+     状態表示（「録音中 ●」）と帯は同じ位置に重ねる。計測中は帯だけ、録音中は帯が畳まれて
+     状態表示だけが見えるので、両方が同時に見えることはない。 */
+  body.diag #status,
+  body.diag #rec-indicator,
+  body.diag #level-wrap,
+  body.diag #scope-wrap {
+    position: fixed; z-index: 2; left: 50%; transform: translateX(-50%);
+    width: calc(100% - 32px); max-width: 360px; margin: 0;
+  }
+  body.diag #level-wrap,
+  body.diag #scope-wrap { top: calc(-40.526vw + 50vh); }
+  body.diag #status,
+  body.diag #rec-indicator { top: calc(-40.526vw + 50vh - 66px); }
 
   /* キャラ */
   .char-stage {
@@ -155,12 +250,28 @@
   .spec-val { font-weight: 700; color: #1a1a1a; font-size: 16px; font-variant-numeric: tabular-nums; }
 
   /* マスコット「ポフ」：待機画面（入口）のみ。控えめな浮遊。診断中・結果・名簿・詳細には出さない。 */
-  /* 待機画面の縦配置: ヘッダー直下は空ける(margin-top:auto)→文言+ポフ→(下に)ボタン→お知らせ予約枠→下部余白。 */
-  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin: auto 0 24px; }   /* 上=ヘッダー直下の空き / 下=ボタンとの間隔 */
+  /* 待機画面の縦配置: ヘッダー直下の空き(73px)→文言+ポフ→(負の余白で重ねて)ボタン→お知らせ予約枠→下部余白。
+     上余白を固定値にしたのはボタン上端を 466px に据え置くため（旧 margin-top:auto は自由余白を折半するのでポフ拡大で下がる）。
+     下は −41px の負マージン＝ポフ下端(画面 507px)がボタン(466〜520px)の内側に入り、切り口がボタンに隠れる。 */
+  .pofu-wrap { display: flex; flex-direction: column; align-items: center; margin: auto 0 -6px; position: relative; z-index: 1; }   /* 下は負の余白＝額縁がボタンの背後へ潜る */
+  /* ポフの額縁：画像の下部（流線・尻尾）を切り落として顔をボタンのすぐ上に置く。
+     画像自体は動かさない（上端は元の位置）ので、浮遊アニメは枠の中で上下する。
+     高さ 247px = 原画 434x405 の y305 で切る × 表示倍率(352/434)。画像幅を変えたらこの値も引き直すこと。 */
+  /* 額縁の下端をボタンの内側(6px)まで下ろし、切り口をボタンの背後に隠す。
+     画像の上端とボタンの位置は動かさない（.pofu-wrap の下余白を −6px にして相殺）。顔〜ボタン間 116.9px は不変。 */
+  .pofu-frame { height: 277px; overflow: hidden; display: block; position: relative; }
+  /* 中空白線のきらめきSVG3つは削除（2026-09-20）。新原画 pofu-v2.png にきらめきが描き込まれており、
+     画面上の中心が 1〜8px しかずれず重なっていたため。 */
   /* お知らせ予約領域: ボタン下に確保する将来のお知らせ枠。下=auto余白で最下部ベタ付けを避け縦バランスを取る。 */
-  .notice-reserve { width: 100%; max-width: 360px; min-height: 72px; margin: 8px 0 auto; }
-  .pofu-lead { font-size: 14px; color: #a89f92; letter-spacing: 0.08em; margin-bottom: 12px; }
-  .pofu-img { width: 220px; height: auto; display: block; animation: pofu-float 3.6s ease-in-out infinite; }
+  .notice-reserve { width: 100%; max-width: 360px; min-height: 72px; margin: 8px 0 auto;
+    display: flex; align-items: center; justify-content: center; font-size: 13px; color: #1B3A5C; letter-spacing: 0.06em; }   /* 濃紺。青グラデの明るい下端で白が負けるため */
+  .pofu-lead { font-size: 14px; color: rgba(255,255,255,0.92); letter-spacing: 0.08em; margin-bottom: 12px; }
+  /* 待機画面の文字だけ丸ゴシックにする（サブセットに含む文字しか出ない箇所に限定） */
+  .app-head .ah-title, .ah-link, .pofu-lead, .btn-start, .notice-reserve {
+    font-family: 'Zen Maru Gothic Sub', 'Hiragino Sans', 'Yu Gothic', sans-serif; font-weight: 700;
+  }
+  /* 待機画面のポフは 1.6倍(352px)。チュートリアルの .tut-pofu は 220px のまま＝吹き出し位置は不変 */
+  .pofu-img { width: 352px; height: auto; display: block; animation: pofu-float 3.6s ease-in-out infinite; }
   @keyframes pofu-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
   @media (prefers-reduced-motion: reduce) { .pofu-img { animation: none; } }
 
@@ -175,6 +286,47 @@
     padding: 22px 12px;
     display: none;
   }
+  /* 待機画面（背景版）では流れの先頭＝ロゴの上に落ちて読めなかった（2026-10-01）。
+     帯は使わず、「診断開始」ボタンと同じ位置・同じ大きさの箱に大きな白文字を1行。表示中はボタンを隠し、
+     6秒で自動的に消える（文字をタップしても消える）。位置はボタンと同じ背景連動の式。 */
+  body.sky .sukashi-msg {
+    position: fixed; z-index: 3; margin: 0; padding: 0; max-width: none;
+    left: 8.157vw; top: calc(34.742vw + 50vh); width: 83.92vw; height: 17.371vw;
+    display: none; align-items: center; justify-content: center;
+    color: #fff; font-size: 40px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap;   /* 1行厳守（上限44px） */
+    font-family: 'Zen Maru Gothic Sub', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  body.sky .sukashi-msg.on { display: flex; }
+  /* すかし表示中は背景を診断中の空（sky-plain.jpg）のままにし、hideSukashi で待機の空（sky-bg.jpg）へ戻す。
+     敷き方は同じなので雲は動かない。ロゴ・泡・添え文は sky-bg.jpg に焼き込まれているため、この間は出ない。 */
+  body.sky.sukashi, html.brand-pofu body.sky.sukashi {
+    background:
+      url('sky-plain.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%);
+  }
+  /* 看板 pofu：ロゴ入りの壁紙を差し替える（ロゴと右下の添え文を 53px 下げた版。SE のステータスバーに掛からない上端 260） */
+  html.brand-pofu body.sky {
+    background:
+      url('sky-bg-pofu.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%);
+  }
+
+  /* ===== 待機・診断中は黒帯と題字を消す（2026-10-01）。空の絵にロゴが焼き込まれているので題字は二重になる。
+     「友だち一覧 ›」だけ右上に濃紺半透明のカプセルで残す。結果以降のクリーム画面は従来どおり黒帯。
+     帯を flow から外しても body は min-height:100vh のままなので背景の拡大率は変わらない（実測で確認）。 */
+  body.sky .app-head, body.diag .app-head {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    background: transparent; padding: calc(10px + var(--sat)) 12px 10px; pointer-events: none;   /* カプセルはステータスバーの下 */
+  }
+  body.sky .app-head .ah-title, body.diag .app-head .ah-title { visibility: hidden; }
+  body.sky .app-head .ah-right, body.diag .app-head .ah-right { flex: 0 0 auto; }
+  body.sky .ah-link, body.diag .ah-link {
+    pointer-events: auto; color: #fff;
+    background: rgba(27, 58, 92, 0.5); border-radius: 999px;
+    padding: 9px 14px; min-height: 36px;      /* タップ領域は黒帯時（約20px高）より広い */
+  }
+  body.sky .ah-link:active, body.diag .ah-link:active { color: #fff; background: rgba(27, 58, 92, 0.7); }
 </style>
 </head>
 <body>
@@ -193,11 +345,16 @@
 <!-- 案内役マスコット「ポフ」：待機画面のみ（診断中・結果・名簿・詳細では隠す）。文言→ポフ→ボタンの導線 -->
 <div class="pofu-wrap" id="pofu">
   <div class="pofu-lead" data-i18n="pofuLead"></div>
-  <img class="pofu-img" src="pofu.png" width="304" height="266" alt="ポフ">
+  <!-- 新原画（立体・流線4本）。元から透過なので縁の除去処理は不要。不透過の pofu.png はチュートリアルが引き続き使う。
+       余白は口の下端が表示上端から 154.1px に来るよう正規化してある（顔〜ボタン間 116.9px の根拠） -->
+  <div class="pofu-frame"><img class="pofu-img" src="pofu-v2.png" width="1430" height="1306" alt="ポフ">
+  </div>
 </div>
 
 <!-- 診断開始ボタン：文言・ポフの視線の先（下）に配置 -->
 <button class="btn btn-start" id="btn-start" data-i18n="btnStart"></button>
+<!-- 診断中に「診断開始」と入れ替わる状態表示。ボタンと同じ位置・同じ高さなので波形の位置がずれない -->
+<div class="rec-indicator" id="rec-indicator" aria-live="polite"></div>
 
 <div class="level-wrap" id="level-wrap">
   <div class="level-label" data-i18n="levelLabel"></div>
@@ -251,23 +408,23 @@
     </div>
   </div>
   <div class="dots" id="dots"><span></span><span></span><span></span></div>
-  <button class="btn btn-reset" id="btn-reset" data-i18n="btnReset" style="margin-top:4px;"></button>
+  <button class="btn btn-reset" id="btn-reset" data-i18n="btnReset" style="margin-top:calc(4px + var(--sab));"></button><!-- 初期表示でホームバー帯に掛からないよう --sab ぶん上に余白（帯なし化 2026-10-07） -->
 </div>
 
 <!-- ===== お知らせ予約領域 =====
      診断開始ボタンの下に確保した将来の「お知らせ」表示スペース（新シーズン告知／アップデート／イベント等）。
      今は機能未実装・空のまま。将来ここに #notice の中身を差し込む（この位置＝待機画面のボタン下）。 -->
-<div class="notice-reserve" id="notice-reserve" aria-hidden="true"></div>
+<div class="notice-reserve" id="notice-reserve"></div><!-- 現在はチケット残数「チケット n枚」を表示（OnaraTickets.refreshNotice） -->
 
-<div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#888; margin-top:8px; min-height:14px;"></div>
+<div id="log-status" style="width:100%; max-width:360px; text-align:center; font-size:11px; color:#5a5148; margin-top:8px; min-height:14px;"></div>
 
 </div><!-- /.content -->
 
 <style>
-  .overlay { position:fixed; inset:0; z-index:30; background:#f7f5f0; overflow-y:auto; display:none; }
+  .overlay { position:fixed; inset:0; z-index:30; background:#f9f5f2; overflow-y:auto; display:none; padding-bottom:var(--sab); }
   .overlay.show { display:block; }
   .ov-head { position:sticky; top:0; background:#2a2a2a; color:#fff; display:flex; align-items:center;
-    justify-content:space-between; padding:12px 16px; z-index:2; }
+    justify-content:space-between; padding:calc(12px + var(--sat)) 16px 12px; z-index:2; }   /* 黒帯はステータスバーの下まで */
   .ov-head .ov-title { font-size:16px; font-weight:700; }
   .ov-back { background:transparent; border:none; color:#fff; font-size:15px; font-weight:700; cursor:pointer; }
   .ov-count { font-size:12px; color:#ccc; }
@@ -288,7 +445,7 @@
     padding:12px 28px 16px; margin:6px 0 16px; min-width:150px; text-align:center; }
   .note-card-label { font-size:11px; font-weight:700; color:#9a948a; letter-spacing:0.16em; margin-bottom:4px; }
   .note-card-val { font-size:46px; font-weight:800; color:#2a2a2a; letter-spacing:0.02em; line-height:1.1; }
-  .pg-hint { font-size:11px; color:#c2bcb2; margin-top:14px; letter-spacing:0.1em; }
+  .pg-hint { font-size:11px; color:#4a443c; margin-top:14px; letter-spacing:0.1em; }   /* スワイプに気づかせる唯一の案内。クリーム地で 8.9:1 */
   .reveal-type { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 12px; border-radius:10px; margin-bottom:12px; }
   .dots { display:flex; gap:8px; justify-content:center; margin:14px 0 8px; }
   .dots span { width:8px; height:8px; border-radius:50%; background:#d5d0c8; transition:background .2s; }
@@ -304,7 +461,7 @@
   /* 入れ替え確認 */
   #swap-overlay { z-index:40; background:rgba(20,18,16,0.55); display:none; align-items:center; justify-content:center; }
   #swap-overlay.show { display:flex; }
-  .swap-box { background:#f7f5f0; border-radius:14px; padding:18px 16px; max-width:360px; width:90%; text-align:center; }
+  .swap-box { background:#f9f5f2; border-radius:14px; padding:18px 16px; max-width:360px; width:90%; text-align:center; }
   .swap-title { font-size:14px; font-weight:700; margin-bottom:12px; }
   .swap-compare { display:flex; align-items:center; justify-content:center; gap:6px; }
   .swap-side { flex:1; }
@@ -314,6 +471,41 @@
   .swap-arrow { font-size:20px; color:#999; }
   .swap-btns { display:flex; gap:10px; margin-top:14px; }
   .swap-btns .btn { margin:0; flex:1; padding:12px; }
+  /* チケット確認ダイアログ：既存の入れ替えダイアログ（.swap-box 系）と同じ様式を再利用。装飾は付けない */
+  #ticket-overlay { z-index:41; background:rgba(20,18,16,0.55); display:none; align-items:center; justify-content:center; }
+  #ticket-overlay.show { display:flex; }
+  /* チュートリアル（初回起動のみ）：待機画面の上に重ねる。ポフ＋淡ピンクの吹き出し（アイコン背景 #f6cdd6 系） */
+  /* 背景は診断中と同じ空の絵（sky-plain.jpg、敷き方も body と同じ center/cover）。2026-10-01 */
+  #tutorial-overlay { z-index:50; display:none; flex-direction:column; align-items:center; justify-content:center; padding:calc(24px + var(--sat)) 20px calc(24px + var(--sab));
+    background: url('sky-plain.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%); }
+  #tutorial-overlay.show { display:flex; }
+  /* 吹き出し：白地＋ポフの線画色（pofu.png 実測 rgb(68,52,36)=#443424）の1px細線。台詞は pre-line で改行位置を厳守 */
+  .tut-bubble { position:relative; background:#fff; color:#2a2a2a; border:1px solid #443424; border-radius:14px; padding:16px 18px; max-width:340px; width:100%;
+    font-size:17px; line-height:1.6; letter-spacing:0.02em; text-align:left; white-space:pre-line; margin-bottom:18px; }   /* 17px＝375px幅で最長行(17字)が1行に収まる最大（実測294.8px/内容幅297px）。仕様19〜20pxは指示により下げた */
+  /* ツノ：輪郭（線色）の三角の上に、1px内側の白い三角を重ねて線画風に */
+  .tut-bubble:before { content:''; position:absolute; left:50%; bottom:-11px; margin-left:-11px; border:11px solid transparent; border-top-color:#443424; border-bottom:0; }
+  .tut-bubble:after  { content:''; position:absolute; left:50%; bottom:-9px;  margin-left:-10px; border:10px solid transparent; border-top-color:#fff;    border-bottom:0; }
+  .tut-pofu { width:220px; height:auto; display:block; }
+  .tut-hint { font-size:12px; color:#1B3A5C; margin-top:16px; letter-spacing:0.08em; }   /* 濃紺。背景が空になり #a89f92 では比 1.6 で沈んだ（2026-10-01） */
+  .tut-go { max-width:340px; margin-top:16px; }
+  /* 台詞は1行＝1ブロック。行頭「「」の行だけ半字ぶん左へ出す（④） */
+  .tut-line { display:block; }
+  .tut-line.hang { text-indent:-0.5em; }
+  /* ①2枚目：吹き出しをポフの下へ、ツノは上向き（ポフを指す） */
+  #tutorial-overlay.tut-below .tut-pofu { order:1; }
+  #tutorial-overlay.tut-below .tut-bubble { order:2; margin-bottom:0; margin-top:18px; }
+  #tutorial-overlay.tut-below .tut-bubble:before { bottom:auto; top:-11px; border-top:0; border-bottom:11px solid #443424; }
+  #tutorial-overlay.tut-below .tut-bubble:after  { bottom:auto; top:-9px;  border-top:0; border-bottom:10px solid #fff; }
+  #tutorial-overlay.tut-below .tut-tickets, #tutorial-overlay.tut-below #tut-hint { order:3; }
+  /* ③ポフ画像の右端の切れ目を消す：右端18pxを透明へ（画像は触らない。チュートリアル・待機画面の両方） */
+  /* 切れ目（PNG最右5列=表示右端約4px）で不透明度が0になるよう、右端40px→6pxの区間で透明へ（旧18pxでは切れ目の位置で残存15〜30%だった） */
+  /* 旧 mask-image（右端フェード）は削除：pofu.png を原画から余白40px付きで切り直したため不要 2026-09-16 */
+  /* ②3枚目：チケット3枚（インラインSVG・白地・線色1px・文字なし）。左から0.2秒間隔でフェードイン（opacityのみ） */
+  .tut-tickets { display:none; gap:10px; margin:12px 0 4px; justify-content:center; }
+  .tut-tickets.show { display:flex; }
+  .tut-ticket { width:60px; height:34px; display:block; opacity:0; transition:opacity .35s ease; }
+  .tut-ticket.in { opacity:1; }
 </style>
 
 <!-- 住人名簿グリッド -->
@@ -362,6 +554,35 @@
   </div>
 </div>
 
+<!-- チケット確認ダイアログ（2ページ目「姿を見る」で表示。既存の入れ替えダイアログと同じ様式） -->
+<div class="overlay" id="ticket-overlay">
+  <div class="swap-box">
+    <div class="swap-title" id="ticket-title"></div>
+    <div class="swap-btns" id="ticket-btns-use">
+      <button class="btn" id="ticket-use" data-i18n="ticketUse" style="background:#2a2a2a;color:#fff;"></button>
+      <button class="btn btn-reset" id="ticket-cancel" data-i18n="ticketCancel"></button>
+    </div>
+    <div class="swap-btns" id="ticket-btns-none">
+      <button class="btn btn-reset" id="ticket-close" data-i18n="ticketClose"></button>
+      <button class="btn" id="ticket-buy" data-i18n="ticketBuy" style="background:#2a2a2a;color:#fff;"></button>
+    </div>
+  </div>
+</div>
+
+<!-- チュートリアル（初回起動のみ：welcomed===false）。4枚、画面タップで次へ、4枚目のみ［探す］ -->
+<div class="overlay" id="tutorial-overlay">
+  <div class="tut-bubble" id="tut-text"></div>
+  <img class="tut-pofu" src="pofu-v2.png" width="1430" height="1306" alt="ポフ"><!-- 透過の新原画。表示幅220pxは据え置き（高さ 205→201px） -->
+  <!-- ②3枚目のみ表示：チケット3枚（横長・角丸・両端中央に切り取りの半円・線色1px・白地・文字なし・60px） -->
+  <div class="tut-tickets" id="tut-tickets" aria-hidden="true">
+    <svg class="tut-ticket" viewBox="0 0 60 34" width="60" height="34" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 H52 A7 7 0 0 1 59 8 V12 A5 5 0 0 0 59 22 V26 A7 7 0 0 1 52 33 H8 A7 7 0 0 1 1 26 V22 A5 5 0 0 0 1 12 V8 A7 7 0 0 1 8 1 Z" fill="#fff" stroke="#443424" stroke-width="1"/></svg>
+    <svg class="tut-ticket" viewBox="0 0 60 34" width="60" height="34" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 H52 A7 7 0 0 1 59 8 V12 A5 5 0 0 0 59 22 V26 A7 7 0 0 1 52 33 H8 A7 7 0 0 1 1 26 V22 A5 5 0 0 0 1 12 V8 A7 7 0 0 1 8 1 Z" fill="#fff" stroke="#443424" stroke-width="1"/></svg>
+    <svg class="tut-ticket" viewBox="0 0 60 34" width="60" height="34" xmlns="http://www.w3.org/2000/svg"><path d="M8 1 H52 A7 7 0 0 1 59 8 V12 A5 5 0 0 0 59 22 V26 A7 7 0 0 1 52 33 H8 A7 7 0 0 1 1 26 V22 A5 5 0 0 0 1 12 V8 A7 7 0 0 1 8 1 Z" fill="#fff" stroke="#443424" stroke-width="1"/></svg>
+  </div>
+  <div class="tut-hint" id="tut-hint">タップで次へ</div>
+  <button class="btn tut-go" id="tut-go" data-i18n="tutGo" style="display:none; background:#2a2a2a; color:#fff;"></button>
+</div>
+
 <script src="chara.js"></script>
 <script>window.ZTRACE = window.ZTRACE || {};</script>
 <script src="path-util.js"></script>
@@ -376,13 +597,22 @@ const ZODIACS  = ['子（ね）','丑（うし）','寅（とら）','卯（う�
 //   動的テキスト … t('キー', ...args) で参照（値が関数なら引数を渡して文字列を得る）。
 // 英語版を足すときは STR.en = { ... } を追加して LANG を切り替える／自動判定するだけ。
 let LANG = 'ja';
+// ===== 看板（BRAND）：www は1本、表に出る名前だけ切り替える（2026-10-07）。既定 pofu。
+//   <html data-brand="onara"> が付いていればブラウザ版（おならレーダー）。内部識別子（DEX_KEY・TICKETS_KEY・OnaraTickets）は触らない。
+const BRAND = document.documentElement.dataset.brand || 'pofu';
+const BRAND_TABLE = {
+  pofu:  { str: { docTitle: 'ポフの友だち探し', appTitle: 'ポフの友だち探し',
+                  tut1: 'ポフです\n友だちを探しています\nどうやら　友だちは\n音の中に住んでいるようなんです' },
+           shareUrl: 'fookear.com/pofu', shareFile: 'pofu-tomodachi.png' },
+  onara: { str: {}, shareUrl: 'tamototrinity-del.github.io/onara-radar', shareFile: 'onara-radar.png' },
+};
 const STR = {
   ja: {
     // --- 静的UI（data-i18n で適用）---
     docTitle:      'おならレーダー',
     appTitle:      'おならレーダー',
-    pofuLead:      '今日の住人を見つけよう',
-    btnStart:      '🎙 診断開始',
+    pofuLead:      'ポフの友だちを見つけよう',
+    btnStart:      '診断開始',        // 絵文字マイクは廃止。設計図どおり描いたマイク＋矢印を擬似要素で置く
     levelLabel:    '入力レベル',
     sukashi:       'すかしましたね',
     noteCardLabel: '音階',
@@ -397,39 +627,56 @@ const STR = {
     specType:      'タイプ',
     pgHint:        '← スワイプ →',
     btnReveal:     '姿を見る',
-    revealMsg:     'あなたの中の住人が姿を現しました',
+    revealMsg:     'あなたの中の友だちが姿を現しました',
     btnRegister:   '記録する',
     btnShare:      '📤 シェア',
     btnReset:      'もう一度',
-    dexOpen:       '住人名簿 ›',
+    dexOpen:       '友だち一覧 ›',
     dexClose:      '✕ 閉じる',
-    dexTitle:      '住人名簿',
-    detailBack:    '‹ 住人名簿',
+    dexTitle:      '友だち一覧',
+    detailBack:    '‹ 友だち一覧',
     detailTitleDefault: '個体詳細',
-    swapTitleDefault:   'このスロットには既に住人がいます。入れ替えますか？',
-    swapCurLabel:  '現在の住人',
-    swapNewLabel:  '新しい住人',
+    swapTitleDefault:   'このスロットには既に友だちがいます。入れ替えますか？',
+    swapCurLabel:  '現在の友だち',
+    swapNewLabel:  '新しい友だち',
     swapYes:       '入れ替える',
     swapNo:        'やめる',
+    // --- チケット（内核・事務トーン）---
+    ticketUse:       '使う',
+    ticketCancel:    'やめる',
+    ticketNoneTitle: 'チケットがありません。明日1枚届きます。',
+    ticketClose:     '閉じる',
+    ticketBuy:       '購入する',
+    ticketBuyTitle:  'チケットがありません。購入しますか？',
+    ticketBusy:      '購入を処理しています',
+    ticketFail:      '購入できませんでした',
+    // --- チュートリアル（初回起動のみ・台詞は一字も変えない）---
+    tut1:  'ポフです\n友だちを探しています\nどうやら　友だちは\nおならに姿を変えているようなんです',
+    tut2:  '一緒に探してください\nボタンを押したら\n静かに待って\n「録音中」が出たら　どうぞ',
+    tut3:  '姿を見るにはチケットが必要です\nまず3枚　おわたしします\n毎日1枚　届きます',
+    tut4:  'くれぐれも\n実には気をつけてくださいね',
+    tutGo: '探す',
     // --- ステータス・エラー（JSから t() で参照）---
     statusIdle:      'マイクボタンを押して開始',
     statusMeasuring: '環境ノイズを計測中… 静かにお待ちください',
     statusWaiting:   '準備完了 — いつでもどうぞ 🎯',
     statusRecording: '● 録音中…',
+    recIndicator:    '録音中 ●',
     statusAnalyzing: '解析中…',
     statusDone:      '診断完了',
     errNoSound:      '音が検出されませんでした',
-    errNoFart:       '有効な屁音が検出されませんでした',
     errMicDenied:    'マイクへのアクセスが拒否されました',
     sharePreparing:  '画像を作成中…',
     shareFailed:     '画像の生成に失敗しました',
     // --- 引数つき可変メッセージ ---
     recorded:       name => `記録しました（${name}）`,
     swapped:        name => `入れ替えました（${name}）`,
-    swapTitle:      name => `${name}のスロットには既に住人がいます。入れ替えますか？`,
+    swapTitle:      name => `${name}のスロットには既に友だちがいます。入れ替えますか？`,
     detailDate:     d => `記録日 ${d}`,
     typeWithPeriod: (type, p) => `${type}（周期性 ${p}）`,
     shareText:      (animal, type) => `私の中から${animal}の${type}が姿を現しました`,
+    ticketNotice:   n => `チケット ${n}枚`,
+    ticketUseTitle: n => `チケットを1枚使います。残り${n - 1}枚になります`,   // n は使用前の残数。押した後の枚数を示す
     // --- 表示ラベル群 ---
     typeLabels:  { '王子':'王子', '王女':'王女', '野良':'野良' },
     animals:     ['ねずみ','うし','とら','うさぎ','りゅう','へび','うま','ひつじ','さる','とり','いぬ','いのしし'],
@@ -437,6 +684,8 @@ const STR = {
   },
 };
 // テキスト取得。関数値なら引数を渡して評価。未定義キーは ja→キー名の順にフォールバック。
+Object.assign(STR.ja, BRAND_TABLE[BRAND].str);          // 看板ぶんの文言を上書き
+document.documentElement.classList.add('brand-' + BRAND);   // CSS 側の切替（待機画面の壁紙）
 function t(key, ...args) {
   const dict = STR[LANG] || STR.ja;
   let v = (dict[key] != null) ? dict[key] : STR.ja[key];
@@ -504,6 +753,38 @@ let noiseFloorDb = -60;
 let state = 'idle'; // idle | measuring | waiting | recording | done
 
 const btnStart  = document.getElementById('btn-start');
+const recInd    = document.getElementById('rec-indicator');
+// 診断中は「診断開始」を消して同じ場所に状態表示を出す（押せないボタンを残さない）
+function setRecordingUI(v) {
+  btnStart.style.display = v ? 'none' : '';
+  recInd.classList.toggle('on', v);
+  if (!v) recInd.textContent = '';
+  // 診断中だけ、状態表示・波形・入力レベルを背景の雲に合わせた位置へ固定する（body.diag）
+  document.body.classList.toggle('diag', v);
+}
+// 背景は待機画面と診断中だけ青。結果1〜3ページはクリームへ戻す
+function setCreamBg(v) { document.body.classList.toggle('bg-cream', v); }
+// すかしの一言。「診断開始」の位置に大きな白文字で1行、SUKASHI_MS 後に自分で消える。
+// 表示中はボタンを隠す（visibility。display は setRecordingUI が使うので触らない）。タップでも消える。
+const SUKASHI_MS = 6000;
+let sukashiTimer = null;
+function showSukashi() {
+  const el = document.getElementById('sukashi-msg');
+  clearTimeout(sukashiTimer);
+  btnStart.style.visibility = 'hidden';
+  const n = document.getElementById('notice-reserve'); if (n) n.style.visibility = 'hidden';   // 「チケット n枚」も一緒に隠す
+  document.body.classList.add('sukashi');   // 背景は診断中の空（sky-plain.jpg）のまま
+  el.classList.add('on');
+  sukashiTimer = setTimeout(hideSukashi, SUKASHI_MS);
+}
+function hideSukashi() {
+  clearTimeout(sukashiTimer); sukashiTimer = null;
+  document.getElementById('sukashi-msg').classList.remove('on');
+  document.body.classList.remove('sukashi');   // 待機の空（sky-bg.jpg）へ戻す
+  btnStart.style.visibility = '';
+  const n = document.getElementById('notice-reserve'); if (n) n.style.visibility = '';
+}
+document.getElementById('sukashi-msg').addEventListener('click', hideSukashi);
 const btnReset  = document.getElementById('btn-reset');
 const statusEl  = document.getElementById('status');
 const levelWrap = document.getElementById('level-wrap');
@@ -515,9 +796,17 @@ function setStatus(msg, cls) {
   statusEl.className = 'status-bar ' + cls;
   statusEl.style.display = 'block';
 }
-function hideStatus() { statusEl.style.display = 'none'; }
+function hideStatus() { statusEl.style.display = 'none'; statusEl.classList.remove('is-collapsed'); }
+// 録音中だけ帯を畳む。setStatus は className を作り直すので、畳むのは必ずその後に呼ぶ
+function collapseStatus(v) { statusEl.classList.toggle('is-collapsed', v); }
 // マスコット「ポフ」は待機画面（入口）のみ表示。診断中・結果・すかしでは隠す。
-function showPofu(v) { const p = document.getElementById('pofu'); if (p) p.style.display = v ? 'flex' : 'none'; }
+function showPofu(v) {
+  const p = document.getElementById('pofu'); if (p) p.style.display = v ? 'flex' : 'none';
+  document.body.classList.toggle('sky', v);   // 待機画面だけ背景版。診断中は従来の青グラデーションに戻る
+  // ⑧ 残数「チケット n枚」は待機画面のみ。#notice-reserve は .content 末尾（#result の後）に常設のため、
+  //    結果表示中もスライダー下に描画されていた（2ページ目下部に出ていた原因）。ポフと同じ条件で出し分ける。
+  const n = document.getElementById('notice-reserve'); if (n) n.style.display = v ? 'flex' : 'none';
+}
 
 // ===== 波形モニタ（対称バー readout）：iOSボイスメモ型。中央の水平線から上下対称に細い縦棒を積む。 =====
 // 横軸=時間（右端に最新バー→左へ紙送り）／棒の高さ=その時間窓の音量(RMS)。データ源は getFloatTimeDomainData。
@@ -828,9 +1117,11 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
 btnStart.addEventListener('click', async () => {
   if (state !== 'idle') return;
   btnStart.disabled = true;
+  setRecordingUI(true);   // 「診断開始」を状態表示に差し替える
+  setCreamBg(false);      // 診断中は青のまま
   showPofu(false);   // 診断に入る＝入口を離れるのでポフは隠す
   document.getElementById('result').style.display = 'none';
-  document.getElementById('sukashi-msg').style.display = 'none';
+  hideSukashi();
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -871,7 +1162,11 @@ btnStart.addEventListener('click', async () => {
 
     // ---- Phase 2: 待機 ----
     state = 'waiting';
+    // マイクが動いて波形が出ている区間は「録音中」として扱う。帯は畳み、見る場所を状態表示と波形に寄せる。
+    // 「準備完了 — いつでもどうぞ」は帯の中に入ったまま畳まれるので画面には出ない（合意済み）。
     setStatus(t('statusWaiting'), 'status-wait');
+    collapseStatus(true);
+    recInd.textContent = t('recIndicator');
     levelFill.style.width = '0%';
     levelFill.style.background = '#2a9d8f';
     // レベルバーを対称バー波形モニタに格上げ（待機中は低い点状、録音でバーが刻まれる）
@@ -900,6 +1195,8 @@ btnStart.addEventListener('click', async () => {
       silentMs = 0; loudMs = 0; bodyConfirmed = false;
       maxLowEnergy = -Infinity; fftSnapshot = null; peakSampleIndex = 0; startTime = null;
       setStatus(t('statusWaiting'), 'status-wait');
+      collapseStatus(true);                       // setStatus が className を作り直すので畳み直す
+      recInd.textContent = t('recIndicator');     // 待機へ戻ってもマイクは動いている＝表示は「録音中 ●」のまま
       Scope.setMode('wait'); Scope.resetBody();   // 赤枠を消す
     };
 
@@ -929,6 +1226,8 @@ btnStart.addEventListener('click', async () => {
             state = 'recording';
             startTime = now;
             setStatus(t('statusRecording'), 'status-rec');
+            collapseStatus(true);                     // 帯を畳んで、見るべき場所を下の1箇所に寄せる
+            recInd.textContent = t('recIndicator');   // ここから実際の録音。波形が主役になる
             Scope.setMode('rec');
             recordedSamples.push(...timeData);
             maxLowEnergy = lowBandEnergy(fftData, audioCtx.sampleRate, analyser.fftSize);
@@ -977,8 +1276,9 @@ btnStart.addEventListener('click', async () => {
 
     if (!sessionScores) {
       hideStatus();   // WAIT_MS 内に有効な本体を確定できなかった＝すかし（帯もエラーも出さない）
-      document.getElementById('sukashi-msg').style.display = 'block';
+      showSukashi();  // 帯として数秒だけ出す
       showPofu(true);   // すかし＝待機（入口）に戻る。ポフを再表示
+      setRecordingUI(false);
       state = 'idle';
       btnStart.disabled = false;
       return;
@@ -990,6 +1290,7 @@ btnStart.addEventListener('click', async () => {
   } catch (e) {
     setStatus(t('errMicDenied'), 'status-error');
     Scope.stop();
+    setRecordingUI(false);
     btnStart.disabled = false;
     state = 'idle';
   }
@@ -998,10 +1299,12 @@ btnStart.addEventListener('click', async () => {
 btnReset.addEventListener('click', () => {
   state = 'idle';
   btnStart.disabled = false;
+  setRecordingUI(false);
+  setCreamBg(false);                                        // 待機画面に戻る＝青へ
   btnStart.style.display = '';                              // アイドルに戻す：診断開始ボタンを再表示
   showPofu(true);                                           // 待機画面に戻る：ポフを再表示
   document.getElementById('result').style.display = 'none';
-  document.getElementById('sukashi-msg').style.display = 'none';
+  hideSukashi();
   Scope.stop();
   hideStatus();                                            // アイドル時はステータス帯を出さない
   drawRadarEmpty();
@@ -1016,7 +1319,7 @@ function goPage(n){
   document.getElementById('slider').style.transform = 'translateX(' + (-curPage*100) + '%)';
   updateDots();
 }
-document.getElementById('btn-reveal').addEventListener('click', () => goPage(2)); // 2p→3p はボタンのみ
+document.getElementById('btn-reveal').addEventListener('click', () => OnaraTickets.requestReveal()); // 2p→3p はボタンのみ。チケット確認を挟む
 (function(){
   const vp = document.querySelector('.slider-vp'); let x0=null, y0=null;
   vp.addEventListener('touchstart', e => { x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
@@ -1054,51 +1357,18 @@ function displayResult(s) {
   lastScores = s;                                          // 記録（住人名簿）用に保持
 
   document.getElementById('result').style.display = 'block';
+  setRecordingUI(false);                                    // 状態表示を消す
+  setCreamBg(true);                                         // 結果1〜3ページはクリーム
   btnStart.style.display = 'none';                          // 結果表示中は「診断開始」を最上部に置かない（もう一度は結果内にある）
   showPofu(false);                                          // 結果（内核）ではポフを出さない
   goPage(0);                                               // 1ページ目（諸元）から
+  OnaraTickets.resetDiagnosis();                           // 新しい診断＝チケットの二重消費防止フラグをリセット
   state = 'idle';
   btnStart.disabled = false;
 
-  // チューニング用：数値のみサーバーCSVへ追記（音声は送らない）
-  logResult(s);
 }
 
-// 診断結果（数値のみ）をサーバーに記録
-function logResult(s) {
-  const logEl = document.getElementById('log-status');
-  const payload = {
-    note:      NOTES[s.noteIdx],
-    noteIdx:   s.noteIdx,
-    zodiac:    ZODIACS[s.noteIdx],
-    hilow:     s.hilow,
-    hz:        +s.hz.toFixed(1),
-    duration:  +s.durationSec.toFixed(3),
-    db:        +s.dbVal.toFixed(1),
-    noiseFloor: +noiseFloorDb.toFixed(1),
-    size:      s.size,
-    length:    s.length,
-    wet:       s.wet,
-    heavy:     s.heavy,
-    sharp:     s.sharp,
-    stable:    s.stable,
-    period:    s.period,   // 周期性（内部データ・結果画面には非表示）
-    type:      s.type,     // period由来のタイプ（暫定・非表示）
-    ua:        navigator.userAgent,
-  };
-  // 内部データはコンソールにも出す（periodやtypeの確認用）
-  console.log('[onara] result', payload);
-  // 母集団CSV記録は開発用サーバー(/api/log)のみ。公開ホスティングでは無い→静かに無視。
-  if (logEl) logEl.textContent = '';
-  fetch('/api/log', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-    .then(r => r.json())
-    .then(d => { if (logEl) logEl.textContent = ''; })
-    .catch(e => { if (logEl) logEl.textContent = ''; });
-}
+// （旧 logResult／fetch('/api/log') は削除：診断結果を外部へ送る経路を残さない。2026-09-15）
 
 // ---- キャラ描画（トレース素材版。干支=noteIdx でデータを動的ロードして描画） ----
 const TRACE_NAMES = ['00_ne','01_ushi','02_tora','03_u','04_tatsu','05_mi','06_uma','07_hitsuji','08_saru','09_tori','10_inu','11_i'];
@@ -1134,7 +1404,18 @@ function renderCharaInto(svg, v, uid) {
   ensureSpecies(zi, function (err) {
     let inner = '';
     if (!err && window.CharaTrace) inner = CharaTrace.charaTraceSVG(v, zi, uid || 'c') || '';
+    const usedTrace = !!inner;
     if (!inner && window.Chara) inner = Chara.charaSVG(v, zi, uid || 'c');
+    // 実機で予備描画（chara.js）に落ちた原因を切り分けるためのログ（2026-10-01）。ネイティブの LOG 画面に出る。
+    // IAP_DEBUG=false の提出版では LOG 画面ごと消えるので、この行は残っても表示されない。
+    try {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line: '[web-chara] renderCharaInto ' + JSON.stringify({
+          uid: uid || 'c', zi, err: err ? String(err.message || err) : null,
+          CharaTrace: !!window.CharaTrace, ZTRACE: !!(window.ZTRACE && window.ZTRACE[TRACE_NAMES[zi]]),
+          used: usedTrace ? 'trace' : (inner ? 'chara(予備)' : 'なし') }) }));
+      }
+    } catch (e) {}
     if (!inner) return;
     rasterizeChara(inner, function (png) {
       if (png) svg.innerHTML = `<image x="-100" y="-100" width="200" height="200" href="${png}"/>`;
@@ -1225,6 +1506,16 @@ function refreshDexGrid() {
   }
 }
 function openDex(){ refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
+// 隠し導線（ビルド25）：友だち一覧のタイトルを 2秒以内に5回タップ → ネイティブが iap-log.txt を共有シートで出す。
+// 見た目は変えない。Web 単体（ブリッジなし）では何も起きない。
+(function () {
+  const el = document.querySelector('#dex-overlay .ov-title'); if (!el) return;
+  let n = 0, last = 0;
+  el.addEventListener('click', () => {
+    const now = Date.now(); if (now - last > 2000) n = 0; last = now; n += 1;
+    if (n >= 5) { n = 0; try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'share_log' })); } catch (e) {} }
+  });
+})();
 function closeDex(){ document.getElementById('dex-overlay').classList.remove('show'); }
 
 let detailEntry = null;   // シェア用：いま個体詳細で開いている住人
@@ -1277,7 +1568,7 @@ function doSwap(yes){
 // ===== シェア画像生成（純SVG合成→PNG。html2canvas不使用でキャラのSVGフィルタも忠実に焼き込む） =====
 // 診断3ページ目・個体詳細のどちらから呼んでも、同じ「全部入り」カード
 // （動物名＋タイプバッジ／キャラ／レーダー／診断諸元＋アプリ名・URL）を生成する。
-const SHARE_URL = 'tamototrinity-del.github.io/onara-radar';
+const SHARE_URL = BRAND_TABLE[BRAND].shareUrl;   // 看板ごと（シェア画像の右下と共有テキストの末尾）
 const CARD_W = 560, CARD_H = 820, CARD_SCALE = 2;
 const CARD_FONT = "'Hiragino Sans','Yu Gothic',sans-serif";
 function xesc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1378,7 +1669,7 @@ async function shareCard(entry){
   try { blob = await renderCardBlob(entry); }
   catch(e){ console.error('[onara] share render failed', e); flashReg(t('shareFailed')); return; }
   flashReg('');
-  const fname = 'onara-radar.png';
+  const fname = BRAND_TABLE[BRAND].shareFile;
   const file = new File([blob], fname, { type:'image/png' });
   const text = t('shareText', ANIMALS[((entry.noteIdx%12)+12)%12], typeLabel(entry.type)) + '\n' + 'https://' + SHARE_URL;
   if (navigator.canShare && navigator.canShare({ files:[file] })){
@@ -1403,6 +1694,249 @@ document.getElementById('swap-no').addEventListener('click', ()=>doSwap(false));
 
 // 静的UIテキストを辞書から流し込む（data-i18n を持つ全要素＋<title>）
 applyStaticText();
+
+// ===== チケット（器）＋「姿を見る」確認＋初回チュートリアル =====
+// 永続化は住人名簿と同じ localStorage＋JSON。IAP・購入処理・ネイティブ橋は未実装（購入結果は将来 grant() に流す）。
+const TICKETS_KEY = 'onara.tickets';
+const TICKET_FREE_MAX = 10;     // free の上限
+const TICKET_WELCOME_FREE = 3;  // チュートリアル完了時に渡す枚数
+const PURCHASE_ENABLED = true;  // 初回リリースから購入あり。ただし［購入する］はネイティブから products を受信済みのときだけ表示
+const TICKET_PRODUCT_ID = 'tickets_3';  // ASC 消耗型「チケット3枚」¥100（価格はダイアログに出さず Apple の購入シートに任せる）
+const TICKET_TXN_KEEP = 50;             // 処理済み transactionId の保持数（冪等化用・直近50件）
+
+window.OnaraTickets = (function () {
+  let revealUsedThisDiag = false;   // 同一診断内の二重消費防止（診断開始でリセット）
+  let pendingReveal = null;         // ダイアログ［使う］後に実行する遷移
+  let products = null;              // ネイティブから受信した商品情報 [{productId, localizedPrice}]（未受信=null）
+  let purchasing = false;           // 購入処理中（多重送信防止）
+  let productsRequested = false;    // 0枚ダイアログからの取り直し要求は1回だけ（ビルド25）
+  let noneOpen = false;             // 0枚ダイアログを開いている間 true（products が届いたら再判定する）
+  // 診断ログ（ビルド9）：ネイティブの LOG 画面へ転送（Web 単体では console のみ）。原因確定後に削除可
+  function dlog(tag, data) {
+    let line = tag; if (data !== undefined) { try { line += ' ' + JSON.stringify(data); } catch (e) { line += ' [unserializable]'; } }
+    try { console.log('[web-iap] ' + line); } catch (e) {}
+    try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line })); } catch (e) {}
+  }
+
+  function today() { const d = new Date(), p = n => ('0' + n).slice(-2); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+  function load() {
+    try { const o = JSON.parse(localStorage.getItem(TICKETS_KEY)); if (o && typeof o === 'object') return o; } catch (e) {}
+    return null;
+  }
+  function save(t) { try { localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); } catch (e) {} }
+  function ensure() {
+    let t = load();
+    if (!t) { t = { free: 0, paid: 0, lastBonusDate: null, welcomed: false, txns: [] }; save(t); }
+    if (typeof t.free !== 'number') t.free = 0;
+    if (typeof t.paid !== 'number') t.paid = 0;
+    if (!('lastBonusDate' in t)) t.lastBonusDate = null;
+    if (typeof t.welcomed !== 'boolean') t.welcomed = false;
+    if (!Array.isArray(t.txns)) t.txns = [];      // 処理済み transactionId（直近 TICKET_TXN_KEEP 件）
+    return t;
+  }
+  function total(t) { t = t || ensure(); return t.free + t.paid; }
+  function refreshNotice() {
+    const el = document.getElementById('notice-reserve');
+    if (el) el.textContent = t('ticketNotice', total());
+  }
+  // 加算の入口。free は上限で切る／paid は上限なし。txId を渡すと処理済みなら付与しない（冪等）。
+  function grant(n, kind, txId) {
+    const tk = ensure(); n = Math.max(0, n | 0);
+    if (txId) {
+      if (tk.txns.indexOf(txId) >= 0) return { free: tk.free, paid: tk.paid, duplicate: true };
+      tk.txns.push(txId); if (tk.txns.length > TICKET_TXN_KEEP) tk.txns = tk.txns.slice(-TICKET_TXN_KEEP);
+    }
+    if (kind === 'paid') tk.paid += n; else tk.free = Math.min(TICKET_FREE_MAX, tk.free + n);
+    save(tk); refreshNotice(); return { free: tk.free, paid: tk.paid, duplicate: false };
+  }
+  // 起動時：welcomed のときだけ日次ボーナス（日付が変わっていれば free+1、付与有無にかかわらず日付更新）
+  function startup() {
+    const tk = ensure();
+    if (tk.welcomed) {
+      const d = today();
+      if (tk.lastBonusDate !== d) { if (tk.free < TICKET_FREE_MAX) tk.free += 1; tk.lastBonusDate = d; save(tk); }
+      refreshNotice();
+    } else {
+      refreshNotice();
+      Tutorial.show();
+    }
+  }
+  function consume() {
+    const tk = ensure();
+    if (tk.paid > 0) tk.paid -= 1; else if (tk.free > 0) tk.free -= 1; else return false;
+    save(tk); refreshNotice(); return true;
+  }
+  // ---- ネイティブ橋（react-native-webview）----
+  function toNative(msg) {
+    try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); return true; } } catch (e) {}
+    return false;
+  }
+  function onNativeMessage(ev) {
+    const raw = ev && ev.data;
+    dlog('onNativeMessage', { target: (ev && ev.currentTarget === window) ? 'window' : 'document', dataType: typeof raw, len: (typeof raw === 'string') ? raw.length : null, head: (typeof raw === 'string') ? raw.slice(0, 300) : null });
+    let m = null; try { m = (typeof raw === 'string') ? JSON.parse(raw) : raw; } catch (e) { dlog('onNativeMessage:parse-fail', String(e)); return; }
+    if (!m || typeof m.type !== 'string') { dlog('onNativeMessage:ignored(no type)'); return; }
+    if (m.type === 'products') {
+      products = Array.isArray(m.items) ? m.items : [];
+      const buy = hasProduct();
+      dlog('products', { products, hasProduct: buy });
+      // 0枚ダイアログを開いたまま届いた（取り直しの返事など）→ 文言と［購入する］を再判定
+      if (noneOpen && ov().classList.contains('show')) {
+        document.getElementById('ticket-title').textContent = t(buy ? 'ticketBuyTitle' : 'ticketNoneTitle');
+        document.getElementById('ticket-buy').style.display = buy ? '' : 'none';
+        dlog('products: 0枚ダイアログを再判定', { buy });
+      }
+      return;
+    }
+    if (m.type === 'purchase_result') {
+      purchasing = false;
+      const before = ensure();
+      dlog('purchase_result', { ok: m.ok, reason: m.reason, message: m.message, productId: m.productId, quantity: m.quantity, transactionId: m.transactionId, before: { free: before.free, paid: before.paid, txns: before.txns.slice() }, dialogShown: ov().classList.contains('show') });
+      if (m.ok) {
+        const r = grant(m.quantity || 3, 'paid', m.transactionId || null);
+        dlog('grant', { args: { n: m.quantity || 3, kind: 'paid', txId: m.transactionId || null }, result: r, totalAfter: total(), stored: ensure() });
+        const sent = toNative({ type: 'purchase_ack', transactionId: m.transactionId || null });   // 付与済み→ネイティブが finish
+        dlog('purchase_ack sent', { sent, transactionId: m.transactionId || null });
+        if (ov().classList.contains('show')) { close(); requestReveal(); }              // 購入直後にそのまま「姿を見る」確認へ
+        return;
+      }
+      if (m.reason === 'cancelled') { dlog('→ cancelled: openNone'); if (ov().classList.contains('show')) openNone(); return; }   // 0枚表示に戻すだけ
+      dlog('→ error: openFail');
+      openFail();
+    }
+  }
+  window.addEventListener('message', onNativeMessage);
+  document.addEventListener('message', onNativeMessage);
+  function hasProduct() { return PURCHASE_ENABLED && !!products && products.some(p => p && p.productId === TICKET_PRODUCT_ID); }
+
+  // ---- ダイアログ（既存 .swap-box 様式・装飾なし）----
+  const ov = () => document.getElementById('ticket-overlay');
+  const setBtns = (use, none) => { document.getElementById('ticket-btns-use').style.display = use ? 'flex' : 'none'; document.getElementById('ticket-btns-none').style.display = none ? 'flex' : 'none'; };
+  function openUse(n) {
+    noneOpen = false;
+    document.getElementById('ticket-title').textContent = t('ticketUseTitle', n);
+    setBtns(true, false); ov().classList.add('show');
+  }
+  // 0枚：商品受信済みなら「購入しますか？」＋［購入する］［閉じる］、未受信（Web単体/取得失敗）はフォールバック文言
+  function openNone() {
+    const buy = hasProduct();
+    document.getElementById('ticket-title').textContent = t(buy ? 'ticketBuyTitle' : 'ticketNoneTitle');
+    const bb = document.getElementById('ticket-buy'), cb = document.getElementById('ticket-close');
+    bb.style.display = buy ? '' : 'none'; bb.disabled = false; cb.disabled = false;
+    setBtns(false, true); ov().classList.add('show');
+    noneOpen = true;
+    // 未受信／取得失敗なら、ネイティブに取り直しを1回だけ頼む。文言はそのまま、届いたら上の再判定で［購入する］が出る（ビルド25）
+    if (!buy && !productsRequested) {
+      productsRequested = true;
+      const sent = toNative({ type: 'get_products' });
+      dlog('get_products sent', { sent, products });
+    }
+  }
+  function openBusy() {
+    noneOpen = false;
+    document.getElementById('ticket-title').textContent = t('ticketBusy');
+    document.getElementById('ticket-buy').disabled = true; document.getElementById('ticket-close').disabled = true;
+    setBtns(false, true); ov().classList.add('show');
+  }
+  function openFail() {
+    noneOpen = false;
+    document.getElementById('ticket-title').textContent = t('ticketFail');
+    document.getElementById('ticket-buy').style.display = 'none';
+    const cb = document.getElementById('ticket-close'); cb.disabled = false;
+    setBtns(false, true); ov().classList.add('show');
+  }
+  function close() { noneOpen = false; ov().classList.remove('show'); pendingReveal = null; document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false; }
+  // 2ページ目「姿を見る」
+  function requestReveal() {
+    if (revealUsedThisDiag) { goPage(2); return; }          // 同一診断内は再確認なしで3pへ
+    const n = total();
+    if (n > 0) { pendingReveal = () => goPage(2); openUse(n); }
+    else openNone();
+  }
+  function onUse() {
+    if (!consume()) { close(); openNone(); return; }
+    revealUsedThisDiag = true;
+    const go = pendingReveal; close(); if (go) go();
+  }
+  function onBuy() {
+    dlog('onBuy', { purchasing, hasProduct: hasProduct(), products, tickets: ensure() });
+    if (purchasing || !hasProduct()) return;
+    const sent = toNative({ type: 'purchase', productId: TICKET_PRODUCT_ID });
+    dlog('purchase sent', sent);
+    if (!sent) { openFail(); return; }
+    purchasing = true; openBusy();
+  }
+  function resetDiagnosis() { revealUsedThisDiag = false; }
+
+  document.getElementById('ticket-use').addEventListener('click', onUse);
+  document.getElementById('ticket-cancel').addEventListener('click', close);
+  document.getElementById('ticket-close').addEventListener('click', () => { if (!document.getElementById('ticket-close').disabled) close(); });
+  document.getElementById('ticket-buy').addEventListener('click', onBuy);
+  const readySent = toNative({ type: 'web_ready' });   // ネイティブが products を再送するための合図（届かなければ無視される）
+  dlog('init', { readySent, hasBridge: !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage), PURCHASE_ENABLED, TICKET_PRODUCT_ID, tickets: ensure() });
+
+  return { load: ensure, grant, total: () => total(), refreshNotice, requestReveal, resetDiagnosis, startup,
+           _today: today, _onNativeMessage: onNativeMessage, _hasProduct: hasProduct };
+})();
+
+// 初回チュートリアル：4枚。画面タップで次へ、4枚目のみ［探す］。スキップなし。
+const Tutorial = (function () {
+  const lines = ['tut1', 'tut2', 'tut3', 'tut4'];
+  let idx = 0;
+  const ov = () => document.getElementById('tutorial-overlay');
+  let ticketTimers = [];
+  function render() {
+    // 台詞は辞書の文字列を一字も変えず、改行ごとに1行＝1ブロックで描画。行頭「「」の行だけ半字ぶん左へ（④）
+    const text = t(lines[idx]);
+    document.getElementById('tut-text').innerHTML = text.split('\n')
+      .map(l => `<span class="tut-line${l.charAt(0) === '「' ? ' hang' : ''}">${xesc(l)}</span>`).join('');
+    const last = idx === lines.length - 1;
+    document.getElementById('tut-go').style.display = last ? '' : 'none';
+    document.getElementById('tut-hint').style.display = last ? 'none' : '';
+    // ①2枚目のみ：吹き出しをポフの下・ツノ上向き
+    ov().classList.toggle('tut-below', idx === 1);
+    // ②3枚目のみ：チケット3枚を左から0.2秒間隔でフェードイン（他の枚では非表示）
+    ticketTimers.forEach(clearTimeout); ticketTimers = [];
+    const row = document.getElementById('tut-tickets');
+    const items = row.querySelectorAll('.tut-ticket');
+    items.forEach(el => el.classList.remove('in'));
+    if (idx === 2) {
+      row.classList.add('show');
+      items.forEach((el, i) => ticketTimers.push(setTimeout(() => el.classList.add('in'), 200 * i)));
+    } else {
+      row.classList.remove('show');
+    }
+  }
+  function show() { idx = 0; render(); ov().classList.add('show'); }
+  function next() { if (idx < lines.length - 1) { idx += 1; render(); } }
+  function finish() {
+    const tk = OnaraTickets.load();
+    tk.welcomed = true; tk.free = TICKET_WELCOME_FREE; tk.lastBonusDate = OnaraTickets._today();
+    try { localStorage.setItem(TICKETS_KEY, JSON.stringify(tk)); } catch (e) {}
+    ov().classList.remove('show');
+    OnaraTickets.refreshNotice();
+  }
+  ov().addEventListener('click', (e) => { if (e.target && e.target.id === 'tut-go') return; next(); });
+  document.getElementById('tut-go').addEventListener('click', (e) => { e.stopPropagation(); finish(); });
+  return { show };
+})();
+
+// 確認用ログ（アプリ内のみ。IAP_DEBUG=false の提出版では LOG 画面が無いので表示されない）2026-10-01
+//  [web] v=…        → 新しい index.html（?v=WWW_VERSION 付き URL）が読まれた証拠
+//  [web] headers … → 自オリジンの chara-trace.js の Cache-Control / ETag（no-store が実機で効いている証拠）
+(function () {
+  const post = (line) => { try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line })); } catch (e) {} };
+  if (!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage)) return;
+  post('[web] v=' + (location.search || '(なし)') + ' href=' + location.href);
+  try {
+    fetch('chara-trace.js', { method: 'HEAD' }).then(r => {
+      post('[web] headers chara-trace.js ' + JSON.stringify({ status: r.status, 'cache-control': r.headers.get('cache-control'), etag: r.headers.get('etag'), 'last-modified': r.headers.get('last-modified') }));
+    }).catch(e => post('[web] headers fetch失敗 ' + String(e && e.message || e)));
+  } catch (e) { post('[web] headers 例外 ' + String(e && e.message || e)); }
+})();
+
+showPofu(true);          // 初回描画は待機画面＝背景版を敷く（以後は各遷移で showPofu が切り替える）
+OnaraTickets.startup();
 </script>
 </body>
 </html>
