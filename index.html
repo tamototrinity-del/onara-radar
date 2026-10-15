@@ -47,9 +47,15 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: calc(12px + var(--sat)) 16px 12px;   /* 黒帯はステータスバーの下まで伸びる */
   }
-  .app-head .ah-left, .app-head .ah-right { flex: 0 0 88px; display: flex; align-items: center; }
-  .app-head .ah-right { justify-content: flex-end; }
-  .app-head .ah-title { flex: 1; text-align: center; font-size: 16px; font-weight: 700; letter-spacing: 0.04em; }
+  .app-head .ah-left, .app-head .ah-right { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+  /* 更新①：黒帯は 左[きょうの音 ›] ／ 中央 題字（absolute）／ 右[友だち一覧 ›]。375 でも題字がカプセルと重ならない */
+  .app-head { justify-content: space-between; }
+  .ah-count { font-size: 11px; font-weight: 700; color: #fff; background: #d9534f; border-radius: 999px; padding: 1px 6px; margin-left: -6px; display: none; }
+  .ah-count.on { display: inline-block; }
+  /* 題字は右のカプセル数に関係なく画面中央（absolute で中央寄せ。.app-head は sticky なので位置基準になる） */
+  .app-head .ah-title { position: absolute; left: 50%; transform: translateX(-50%); max-width: 46%; text-align: center; font-size: 16px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 待機・診断中（題字なし）は2つとも右端へ：[きょうの音 n ›][友だち一覧 ›] の並び */
+  body.sky .app-head, body.diag .app-head { justify-content: flex-end; gap: 10px; }
   .ah-link { background: transparent; border: none; color: #cfc9c0; font-size: 14px; font-weight: 600; letter-spacing: 0.03em; cursor: pointer; padding: 0; }
   .ah-link:active { color: #fff; }
 
@@ -319,7 +325,7 @@
     position: fixed; top: 0; left: 0; right: 0; z-index: 20;
     background: transparent; padding: calc(10px + var(--sat)) 12px 10px; pointer-events: none;   /* カプセルはステータスバーの下 */
   }
-  body.sky .app-head .ah-title, body.diag .app-head .ah-title { visibility: hidden; }
+  body.sky .app-head .ah-title, body.diag .app-head .ah-title { display: none; }   /* 題字は絵に入っている。幅も取らせない（カプセル2つが右端に収まるように） */
   body.sky .app-head .ah-right, body.diag .app-head .ah-right { flex: 0 0 auto; }
   body.sky .ah-link, body.diag .ah-link {
     pointer-events: auto; color: #fff;
@@ -333,7 +339,7 @@
 
 <!-- 共通ヘッダー（左：ナビ｜中央：タイトル｜右：住人名簿リンク） -->
 <header class="app-head">
-  <div class="ah-left"></div>
+  <div class="ah-left"><button id="btn-ledger-open" class="ah-link" data-i18n="ledgerOpen"></button><span class="ah-count" id="ledger-count"></span></div><!-- 更新①：黒帯では左に「きょうの音」、右に「友だち一覧」。待機・診断中は題字が無いので2つとも右へ寄る -->
   <div class="ah-title" data-i18n="appTitle"></div>
   <div class="ah-right"><button id="btn-dex-open" class="ah-link" data-i18n="dexOpen"></button></div>
 </header>
@@ -355,6 +361,8 @@
 <button class="btn btn-start" id="btn-start" data-i18n="btnStart"></button>
 <!-- 診断中に「診断開始」と入れ替わる状態表示。ボタンと同じ位置・同じ高さなので波形の位置がずれない -->
 <div class="rec-indicator" id="rec-indicator" aria-live="polite"></div>
+<!-- 更新①：診断中のキャンセル（録音をやめて待機へ。帳面には入れない） -->
+<button class="btn-cancel-rec" id="btn-cancel-rec" data-i18n="btnCancelRec"></button>
 
 <div class="level-wrap" id="level-wrap">
   <div class="level-label" data-i18n="levelLabel"></div>
@@ -389,20 +397,26 @@
         <div class="pg-hint" data-i18n="pgHint"></div>
       </div>
 
-      <!-- 2p: レーダーのみ ＋ 姿を見るボタン -->
+      <!-- 2p: レーダーのみ（更新①：「姿を見る」は3ページ目へ移動。1↔2↔3 すべてスワイプ可） -->
       <div class="page">
         <div class="radar-wrap"><canvas id="radar" width="200" height="200"></canvas></div>
-        <button class="btn" id="btn-reveal" data-i18n="btnReveal" style="background:#2a2a2a; color:#fff;"></button>
+        <div class="pg-hint" data-i18n="pgHint"></div>
       </div>
 
-      <!-- 3p: 出現 ＋ キャラ ＋ 干支 ＋ タイプ -->
+      <!-- 3p: 姿を見る（チケット1枚）の門 → 消費後は出現 ＋ キャラ ＋ 干支 ＋ タイプ -->
       <div class="page">
-        <div class="reveal-msg" id="reveal-msg" data-i18n="revealMsg"></div>
-        <div class="char-stage"><svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
-        <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
-        <div class="reveal-type" id="reveal-type"></div>
-        <button class="btn btn-dex-register" id="btn-dex-register" data-i18n="btnRegister" style="background:#3a6a4a; color:#fff;"></button>
-        <button class="btn" id="btn-share-result" data-i18n="btnShare" style="background:#e8e4de; color:#3a3a3a; margin-top:-8px;"></button>
+        <div class="reveal-gate" id="reveal-gate">
+          <div class="reveal-lead" data-i18n="revealLead"></div>
+          <button class="btn" id="btn-reveal" data-i18n="btnRevealTicket" style="background:#2a2a2a; color:#fff;"></button>
+        </div>
+        <div class="reveal-body" id="reveal-body" style="display:none;">
+          <div class="reveal-msg" id="reveal-msg" data-i18n="revealMsg"></div>
+          <div class="char-stage"><svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+          <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
+          <div class="reveal-type" id="reveal-type"></div>
+          <button class="btn btn-dex-register" id="btn-dex-register" data-i18n="btnRegister" style="background:#3a6a4a; color:#fff;"></button>
+          <button class="btn" id="btn-share-result" data-i18n="btnShare" style="background:#e8e4de; color:#3a3a3a; margin-top:-8px;"></button>
+        </div>
       </div>
 
     </div>
@@ -437,6 +451,28 @@
   .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
   /* キャラ出現時の文言 */
   .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 6px; }
+  /* 更新①：3ページ目の門（ポフの一言＋姿を見るボタン）。姿を見たら .reveal-body に差し替わる */
+  .reveal-gate { width:100%; max-width:360px; display:flex; flex-direction:column; align-items:center; padding-top:56px; }
+  .reveal-lead { font-size:15px; color:#2a2a2a; letter-spacing:0.04em; text-align:center; margin-bottom:22px; line-height:1.7; }
+  .reveal-body { width:100%; display:flex; flex-direction:column; align-items:center; }
+  /* 更新①：帳面「きょうの音」。名簿と同じ黒帯・クリーム地。行は時刻／音階／6軸の要約 */
+  .ledger-list { padding:12px 16px calc(24px + var(--sab)); max-width:520px; margin:0 auto; }
+  .ledger-row { display:grid; grid-template-columns:48px 1fr 14px; align-items:center; gap:10px; background:#fff; border:1px solid #e0ddd8; border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .ledger-row:active { background:#f3efe9; }
+  .ledger-time { font-size:13px; font-weight:700; color:#2a2a2a; font-variant-numeric:tabular-nums; }
+  .ledger-main { display:flex; align-items:baseline; gap:12px; white-space:nowrap; }
+  .ledger-note { font-size:19px; font-weight:800; color:#2a2a2a; min-width:38px; }
+  .ledger-note small { font-size:10px; font-weight:700; color:#8a8378; margin-left:2px; }
+  .ledger-specs { font-size:11px; color:#5a5148; letter-spacing:0.02em; line-height:1.6; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ledger-specs b { color:#2a2a2a; font-weight:700; margin-right:2px; }
+  .ledger-specs span { margin-right:10px; }
+  .ledger-arrow { color:#b5aea4; font-size:16px; text-align:right; }
+  .ledger-empty { text-align:center; font-size:13px; color:#8a8378; letter-spacing:0.06em; padding:48px 0; }
+  /* 更新①：診断中の「やめる」。画面下寄り、白の文字だけ */
+  /* 位置は波形の箱の下（箱 top calc(-40.526vw + 50vh)、高さ132）。雲の帯に掛からない青地 */
+  .btn-cancel-rec { display:none; position:fixed; z-index:3; left:50%; transform:translateX(-50%); top:calc(-40.526vw + 50vh + 150px);
+    background:transparent; border:none; color:#fff; font-size:14px; font-weight:700; letter-spacing:0.1em; padding:10px 24px; cursor:pointer; opacity:0.9; }
+  body.diag .btn-cancel-rec { display:block; }
   /* 診断結果の3ページスライダー */
   .slider-vp { width:100%; max-width:380px; margin:0 auto; overflow:hidden; }
   .slider { display:flex; transition:transform 0.3s ease; }
@@ -509,6 +545,12 @@
 </style>
 
 <!-- 住人名簿グリッド -->
+<!-- 更新①：帳面「きょうの音」（保留中の診断。文字と CSS のみ） -->
+<div class="overlay" id="ledger-overlay">
+  <div class="ov-head"><button class="ov-back" id="ledger-close" data-i18n="ledgerBackTop"></button><div class="ov-title" data-i18n="ledgerTitle"></div><div class="ov-count" id="ledger-head-count"></div></div>
+  <div class="ledger-list" id="ledger-list"></div>
+</div>
+
 <div class="overlay" id="dex-overlay">
   <div class="ov-head"><button class="ov-back" id="dex-close" data-i18n="dexClose"></button><div class="ov-title" data-i18n="dexTitle"></div><div class="ov-count"></div></div>
   <div class="dex-grid" id="dex-grid"></div>
@@ -628,6 +670,17 @@ const STR = {
     specType:      'タイプ',
     pgHint:        '← スワイプ →',
     btnReveal:     '姿を見る',
+    // --- 更新①「きょうの音」（両看板共通。呼び名を変えるときは BRAND_TABLE に ledgerTitle/ledgerOpen を足す）---
+    btnRevealTicket: '姿を見る（チケット1枚）',
+    revealLead:    'この音の友だち、見てみますか',
+    ledgerOpen:    'きょうの音 ›',
+    ledgerTitle:   'きょうの音',
+    ledgerBackTop: '‹ 戻る',
+    ledgerBack:    'きょうの音へ戻る',
+    ledgerEmpty:   'まだありません',
+    ledgerRefreshed: '情報が更新されました',
+    ledgerHeadCount: n => `${n} / 7`,
+    btnCancelRec:  'やめる',
     revealMsg:     'あなたの中の友だちが姿を現しました',
     btnRegister:   '記録する',
     btnShare:      '📤 シェア',
@@ -1115,8 +1168,25 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
 }
 
 // ---- メイン処理 ----
+// 更新①：診断中のキャンセル。ループは state==='idle' で抜け、その後の処理は diagCancelled で止める
+let diagCancelled = false;
+function finishCancel() {
+  try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  levelWrap.style.display = 'none';
+  Scope.stop();
+  hideStatus();
+  showPofu(true);
+  setRecordingUI(false);
+  state = 'idle';
+  btnStart.disabled = false;
+}
+document.getElementById('btn-cancel-rec').addEventListener('click', () => {
+  if (state === 'idle' || state === 'done') return;
+  diagCancelled = true; state = 'idle';   // 各ループが次のフレームで抜ける
+});
 btnStart.addEventListener('click', async () => {
   if (state !== 'idle') return;
+  diagCancelled = false;
   btnStart.disabled = true;
   setRecordingUI(true);   // 「診断開始」を状態表示に差し替える
   setCreamBg(false);      // 診断中は青のまま
@@ -1145,6 +1215,7 @@ btnStart.addEventListener('click', async () => {
     const measureStart = Date.now();
     await new Promise(resolve => {
       const measureLoop = () => {
+        if (state === 'idle') { resolve(); return; }   // 更新①：「やめる」
         analyser.getFloatTimeDomainData(timeData);
         const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
         noiseRMSList.push(rms);
@@ -1161,6 +1232,7 @@ btnStart.addEventListener('click', async () => {
     // 本体候補のしきい値＝ノイズフロア+BODY.MARGIN_DB（環境音・小音では超えない水準）
     const bodyThreshold = noiseRMS * Math.pow(10, BODY.MARGIN_DB / 20);
 
+    if (diagCancelled) { finishCancel(); return; }   // 更新①：計測中に「やめる」
     // ---- Phase 2: 待機 ----
     state = 'waiting';
     // マイクが動いて波形が出ている区間は「録音中」として扱う。帯は畳み、見る場所を状態表示と波形に寄せる。
@@ -1267,6 +1339,7 @@ btnStart.addEventListener('click', async () => {
       requestAnimationFrame(loop);
     });
 
+    if (diagCancelled) { finishCancel(); return; }   // 更新①：待機・録音中に「やめる」（帳面には入れない）
     state = 'done';
     Scope.endBody();
 
@@ -1285,6 +1358,11 @@ btnStart.addEventListener('click', async () => {
       return;
     }
 
+    // 更新①：算出と同時に帳面へ（ユーザー操作なし）。すかしはここに来ないので自然に除外される
+    sessionScores.at = Date.now();
+    sessionScores.id = Ledger.add(sessionScores);
+    NoteLog.add(sessionScores);
+    resultFromLedger = false;
     // 表示
     displayResult(sessionScores);
 
@@ -1297,7 +1375,8 @@ btnStart.addEventListener('click', async () => {
   }
 });
 
-btnReset.addEventListener('click', () => {
+// 結果画面を閉じて待機へ（更新①：帳面経由で開いていたときは帳面へ戻る）
+function closeResult() {
   state = 'idle';
   btnStart.disabled = false;
   setRecordingUI(false);
@@ -1310,7 +1389,12 @@ btnReset.addEventListener('click', () => {
   hideStatus();                                            // アイドル時はステータス帯を出さない
   drawRadarEmpty();
   drawMouseDefault();
-});
+  const back = resultFromLedger; resultFromLedger = false;
+  lastScores = null;                                       // 閉じたら「姿を見た状態」も消える
+  Ledger.refreshCount();
+  if (back) Ledger.open();
+}
+btnReset.addEventListener('click', closeResult);
 
 // ===== 診断結果の3ページスライダー =====
 let curPage = 0;
@@ -1328,8 +1412,8 @@ document.getElementById('btn-reveal').addEventListener('click', () => OnaraTicke
     if (x0==null) return;
     const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
     if (Math.abs(dx)>40 && Math.abs(dx)>Math.abs(dy)) {
-      if (dx<0) { if (curPage===0) goPage(1); }   // 左スワイプ: 1→2 のみ（2→3はボタン限定）
-      else { if (curPage>0) goPage(curPage-1); }  // 右スワイプ: 戻る
+      if (dx<0) { if (curPage<2) goPage(curPage+1); }   // 左スワイプ: 1→2→3（更新①：3ページ目は門なので解放）
+      else { if (curPage>0) goPage(curPage-1); }       // 右スワイプ: 戻る
     }
     x0=null;
   }, {passive:true});
@@ -1357,6 +1441,11 @@ function displayResult(s) {
   drawMouse(s);
   lastScores = s;                                          // 記録（住人名簿）用に保持
 
+  // 更新①：門を閉じた状態（姿は未表示）で開く。帳面から開き直したときも同じ
+  document.getElementById('reveal-gate').style.display = '';
+  document.getElementById('reveal-body').style.display = 'none';
+  const resetBtn = document.getElementById('btn-reset');
+  resetBtn.textContent = t(resultFromLedger ? 'ledgerBack' : 'btnReset');
   document.getElementById('result').style.display = 'block';
   setRecordingUI(false);                                    // 状態表示を消す
   setCreamBg(true);                                         // 結果1〜3ページはクリーム
@@ -1470,6 +1559,83 @@ drawRadarEmpty();
 // ===== 住人名簿 =====
 const DEX_KEY = 'onara_dex_v1';
 let lastScores = null;
+let resultFromLedger = false;   // 更新①：結果画面を帳面の行から開いたか（下のボタンが「きょうの音へ戻る」になる）
+
+// ===== 更新①：帳面「きょうの音」と、その日の音名記録 =====
+// 既存キー（DEX_KEY / TICKETS_KEY）は触らない。日付が変わったら両方とも消える（起動時・帳面を開く時・追加時に判定）
+const LEDGER_KEY = 'onara.ledger';
+const NOTELOG_KEY = 'onara.notelog';
+const LEDGER_MAX = 7;
+function localToday() { const d = new Date(), p = n => ('0' + n).slice(-2); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+const Ledger = (function () {
+  function load() { try { const o = JSON.parse(localStorage.getItem(LEDGER_KEY)); if (o && Array.isArray(o.rows)) return o; } catch (e) {} return { date: null, rows: [], clearedAt: null }; }
+  function save(o) { try { localStorage.setItem(LEDGER_KEY, JSON.stringify(o)); } catch (e) {} }
+  // 日付が変わっていたら全行消去。消去した事実は clearedAt に残す（空表示の文言を切り替えるため）
+  function ensureToday() {
+    const o = load(), d = localToday();
+    if (o.date && o.date !== d) { const had = o.rows.length > 0; o.rows = []; o.date = d; o.clearedAt = had ? d : o.clearedAt; save(o); NoteLog.clearIfStale(); }
+    else if (!o.date) { o.date = d; save(o); }
+    return o;
+  }
+  function pick(s) { return { id: s.id, at: s.at, size: s.size, length: s.length, wet: s.wet, heavy: s.heavy, sharp: s.sharp, stable: s.stable,
+    noteIdx: s.noteIdx, hilow: s.hilow, type: s.type, period: s.period, hz: s.hz, durationSec: s.durationSec, dbVal: s.dbVal }; }
+  function add(s) {
+    const o = ensureToday();
+    const id = (s.at || Date.now()) + '-' + Math.random().toString(36).slice(2, 7);
+    o.rows.push(pick(Object.assign({}, s, { id })));
+    o.rows.sort((a, b) => a.at - b.at);                // 新しいものが下
+    while (o.rows.length > LEDGER_MAX) o.rows.shift();  // 8件目で一番古い行を押し出す
+    save(o); refreshCount(); return id;
+  }
+  function remove(id) { const o = load(); o.rows = o.rows.filter(r => r.id !== id); save(o); refreshCount(); render(); }
+  function rows() { return ensureToday().rows; }
+  function fmtTime(ts) { const d = new Date(ts), p = n => ('0' + n).slice(-2); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+  function render() {
+    const list = document.getElementById('ledger-list'); if (!list) return;
+    const o = ensureToday();
+    document.getElementById('ledger-head-count').textContent = t('ledgerHeadCount', o.rows.length);
+    if (o.rows.length === 0) {
+      list.innerHTML = `<div class="ledger-empty">${xesc(t(o.clearedAt === o.date ? 'ledgerRefreshed' : 'ledgerEmpty'))}</div>`;
+      return;
+    }
+    list.innerHTML = o.rows.map(r => {
+      const hl = r.hilow > 0 ? 'Hi' : r.hilow < 0 ? 'Low' : '';
+      const L = t('radarLabels');   // 短い軸名（レーダーと同じ：大きさ／長さ／湿り気／重厚感／キレ／安定感）
+      return `<div class="ledger-row" data-id="${xesc(r.id)}">
+        <div class="ledger-time">${fmtTime(r.at)}</div>
+        <div>
+          <div class="ledger-main"><span class="ledger-note">${xesc(NOTES[r.noteIdx])}${hl ? `<small>${hl}</small>` : ''}</span>
+            <span class="ledger-specs"><span><b>${xesc(L[0])}</b>${xesc(fmtDb(r.dbVal))}</span><span><b>${xesc(L[1])}</b>${(+r.durationSec).toFixed(2)} s</span></span></div>
+          <div class="ledger-specs"><span><b>${xesc(L[2])}</b>${r.wet}</span><span><b>${xesc(L[3])}</b>${r.heavy}</span><span><b>${xesc(L[4])}</b>${r.sharp}</span><span><b>${xesc(L[5])}</b>${r.stable}</span></div>
+        </div>
+        <div class="ledger-arrow">›</div></div>`;
+    }).join('');
+    list.querySelectorAll('.ledger-row').forEach(el => el.addEventListener('click', () => openRow(el.dataset.id)));
+  }
+  function refreshCount() {
+    const n = ensureToday().rows.length, el = document.getElementById('ledger-count');
+    if (el) { el.textContent = n ? String(n) : ''; el.classList.toggle('on', n > 0); }
+  }
+  function open() { render(); document.getElementById('ledger-overlay').classList.add('show'); }
+  function close() { document.getElementById('ledger-overlay').classList.remove('show'); }
+  // 行をタップ → 同じ結果画面（1・2ページ目 → 3ページ目の門）
+  function openRow(id) {
+    const r = rows().find(x => x.id === id); if (!r) return;
+    close();
+    OnaraTickets.resetDiagnosis();
+    resultFromLedger = true;
+    displayResult(Object.assign({}, r));
+  }
+  return { add, remove, rows, render, refreshCount, open, close, ensureToday };
+})();
+const NoteLog = (function () {
+  function load() { try { const o = JSON.parse(localStorage.getItem(NOTELOG_KEY)); if (o && Array.isArray(o.items)) return o; } catch (e) {} return { date: null, items: [] }; }
+  function save(o) { try { localStorage.setItem(NOTELOG_KEY, JSON.stringify(o)); } catch (e) {} }
+  function clearIfStale() { const o = load(), d = localToday(); if (o.date && o.date !== d) { o.items = []; o.date = d; save(o); } }
+  // 時刻と音名（Hi/Low は無視）だけ。姿にして帳面から消えた分も残る。日付が変わったら消える。①では UI なし
+  function add(s) { clearIfStale(); const o = load(); o.date = localToday(); o.items.push({ at: s.at || Date.now(), noteIdx: s.noteIdx }); save(o); }
+  return { add, clearIfStale, load };
+})();
 const DEX_TYPECOL = { '王子':'#4f79c8', '王女':'#d46a94', '野良':'#7a8a7a' };
 
 function dexLoad() {
@@ -1480,7 +1646,9 @@ function dexSave(dex) { try { localStorage.setItem(DEX_KEY, JSON.stringify(dex))
 function scoreToEntry(s) {
   return { size:s.size, length:s.length, wet:s.wet, heavy:s.heavy, sharp:s.sharp, stable:s.stable,
     noteIdx:s.noteIdx, hilow:s.hilow, type:s.type, period:s.period, hz:+(s.hz||0),
-    note:NOTES[s.noteIdx], zodiac:ZODIACS[s.noteIdx], durationSec:s.durationSec, dbVal:s.dbVal, savedAt:Date.now() };
+    note:NOTES[s.noteIdx], zodiac:ZODIACS[s.noteIdx], durationSec:s.durationSec, dbVal:s.dbVal,
+    at:s.at||null,   // 更新①：診断した時刻（帳面の行から引き継ぐ。無い子は null のまま）
+    savedAt:Date.now() };
 }
 function fmtDate(ts){ const d=new Date(ts), p=n=>('0'+n).slice(-2); return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 function hlStr(e){ return e.hilow>0?' [Hi]':e.hilow<0?' [Low]':''; }
@@ -1685,6 +1853,9 @@ async function shareCard(entry){
 }
 
 document.getElementById('btn-dex-open').addEventListener('click', openDex);
+document.getElementById('btn-ledger-open').addEventListener('click', () => Ledger.open());
+document.getElementById('ledger-close').addEventListener('click', () => Ledger.close());
+Ledger.ensureToday(); Ledger.refreshCount();   // 起動時：日付判定と件数
 document.getElementById('dex-close').addEventListener('click', closeDex);
 document.getElementById('detail-close').addEventListener('click', closeDetail);
 document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
@@ -1848,10 +2019,17 @@ window.OnaraTickets = (function () {
   }
   function close() { noneOpen = false; ov().classList.remove('show'); pendingReveal = null; document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false; }
   // 2ページ目「姿を見る」
+  // 更新①：3ページ目の門から。消費したら門を閉じて姿を出し、帳面からその行を消す
+  function showRevealed() {
+    document.getElementById('reveal-gate').style.display = 'none';
+    document.getElementById('reveal-body').style.display = '';
+    if (lastScores && lastScores.id) { Ledger.remove(lastScores.id); }
+    goPage(2);
+  }
   function requestReveal() {
-    if (revealUsedThisDiag) { goPage(2); return; }          // 同一診断内は再確認なしで3pへ
+    if (revealUsedThisDiag) { showRevealed(); return; }     // 同一診断内は再確認なし
     const n = total();
-    if (n > 0) { pendingReveal = () => goPage(2); openUse(n); }
+    if (n > 0) { pendingReveal = showRevealed; openUse(n); }
     else openNone();
   }
   function onUse() {
