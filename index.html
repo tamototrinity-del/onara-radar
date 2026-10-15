@@ -704,6 +704,8 @@ const STR = {
     ticketBuyTitle:  'チケットがありません。購入しますか？',
     ticketBusy:      '購入を処理しています',
     ticketFail:      '購入できませんでした',
+    ticketConnecting:   '接続しています…',          // 1.1：購入を押した時点で商品未取得→取り直し中
+    ticketNoConnection: '接続を確認してください',    // 1.1：取り直しても商品が得られない
     // --- チュートリアル（初回起動のみ・台詞は一字も変えない）---
     tut1:  'ポフです\n友だちを探しています\nどうやら　友だちは\nおならに姿を変えているようなんです',
     tut2:  '一緒に探してください\nボタンを押したら\n静かに待って\n「録音中」が出たら　どうぞ',
@@ -1882,6 +1884,9 @@ window.OnaraTickets = (function () {
   let products = null;              // ネイティブから受信した商品情報 [{productId, localizedPrice}]（未受信=null）
   let purchasing = false;           // 購入処理中（多重送信防止）
   let productsRequested = false;    // 0枚ダイアログからの取り直し要求は1回だけ（ビルド25）
+  let buyWait = null;               // 1.1：［購入する］押下時に商品未取得→取り直しの返事待ち（タイマー）。起動時の一度きりの取得に依存しない
+  const BUY_WAIT_MS = 8000;
+  function hasBridge() { return !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage); }
   let noneOpen = false;             // 0枚ダイアログを開いている間 true（products が届いたら再判定する）
   // 診断ログ（ビルド9）：ネイティブの LOG 画面へ転送（Web 単体では console のみ）。原因確定後に削除可
   function dlog(tag, data) {
@@ -1952,10 +1957,16 @@ window.OnaraTickets = (function () {
       products = Array.isArray(m.items) ? m.items : [];
       const buy = hasProduct();
       dlog('products', { products, hasProduct: buy });
-      // 0枚ダイアログを開いたまま届いた（取り直しの返事など）→ 文言と［購入する］を再判定
+      // 1.1：［購入する］押下後の取り直しの返事 → 商品があれば購入へ、無ければ「接続を確認してください」
+      if (buyWait) {
+        clearTimeout(buyWait); buyWait = null;
+        dlog('products: 購入押下後の取り直し結果', { buy });
+        if (buy) sendPurchase(); else openFail('ticketNoConnection');
+        return;
+      }
+      // 0枚ダイアログを開いたまま届いた（開いた時の取り直しの返事など）→ 文言を再判定
       if (noneOpen && ov().classList.contains('show')) {
-        document.getElementById('ticket-title').textContent = t(buy ? 'ticketBuyTitle' : 'ticketNoneTitle');
-        document.getElementById('ticket-buy').style.display = buy ? '' : 'none';
+        document.getElementById('ticket-title').textContent = t(canBuy() ? 'ticketBuyTitle' : 'ticketNoneTitle');
         dlog('products: 0枚ダイアログを再判定', { buy });
       }
       return;
@@ -1990,34 +2001,36 @@ window.OnaraTickets = (function () {
     setBtns(true, false); ov().classList.add('show');
   }
   // 0枚：商品受信済みなら「購入しますか？」＋［購入する］［閉じる］、未受信（Web単体/取得失敗）はフォールバック文言
+  // 1.1：［購入する］を出す条件は「橋がある（アプリ内）」だけ。商品の取得状況には依存しない（押した時点で取り直す）
+  function canBuy() { return PURCHASE_ENABLED && hasBridge(); }
   function openNone() {
-    const buy = hasProduct();
+    const buy = canBuy();
     document.getElementById('ticket-title').textContent = t(buy ? 'ticketBuyTitle' : 'ticketNoneTitle');
     const bb = document.getElementById('ticket-buy'), cb = document.getElementById('ticket-close');
     bb.style.display = buy ? '' : 'none'; bb.disabled = false; cb.disabled = false;
     setBtns(false, true); ov().classList.add('show');
     noneOpen = true;
-    // 未受信／取得失敗なら、ネイティブに取り直しを1回だけ頼む。文言はそのまま、届いたら上の再判定で［購入する］が出る（ビルド25）
-    if (!buy && !productsRequested) {
+    // 未受信／取得失敗なら、開いた時点でも1回だけ取り直しを頼んでおく（押すまでに届けば待ち時間ゼロ）
+    if (!hasProduct() && !productsRequested) {
       productsRequested = true;
       const sent = toNative({ type: 'get_products' });
-      dlog('get_products sent', { sent, products });
+      dlog('get_products sent (open)', { sent, products });
     }
   }
-  function openBusy() {
+  function openBusy(key) {
     noneOpen = false;
-    document.getElementById('ticket-title').textContent = t('ticketBusy');
+    document.getElementById('ticket-title').textContent = t(key || 'ticketBusy');
     document.getElementById('ticket-buy').disabled = true; document.getElementById('ticket-close').disabled = true;
     setBtns(false, true); ov().classList.add('show');
   }
-  function openFail() {
+  function openFail(key) {
     noneOpen = false;
-    document.getElementById('ticket-title').textContent = t('ticketFail');
+    document.getElementById('ticket-title').textContent = t(key || 'ticketFail');
     document.getElementById('ticket-buy').style.display = 'none';
     const cb = document.getElementById('ticket-close'); cb.disabled = false;
     setBtns(false, true); ov().classList.add('show');
   }
-  function close() { noneOpen = false; ov().classList.remove('show'); pendingReveal = null; document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false; }
+  function close() { noneOpen = false; if (buyWait) { clearTimeout(buyWait); buyWait = null; } ov().classList.remove('show'); pendingReveal = null; document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false; }
   // 2ページ目「姿を見る」
   // 更新①：3ページ目の門から。消費したら門を閉じて姿を出し、帳面からその行を消す
   function showRevealed() {
@@ -2037,13 +2050,22 @@ window.OnaraTickets = (function () {
     revealUsedThisDiag = true;
     const go = pendingReveal; close(); if (go) go();
   }
-  function onBuy() {
-    dlog('onBuy', { purchasing, hasProduct: hasProduct(), products, tickets: ensure() });
-    if (purchasing || !hasProduct()) return;
+  function sendPurchase() {
     const sent = toNative({ type: 'purchase', productId: TICKET_PRODUCT_ID });
     dlog('purchase sent', sent);
     if (!sent) { openFail(); return; }
     purchasing = true; openBusy();
+  }
+  // 1.1：押した時点で商品が無ければ取り直してから購入へ（1回）。返事が無い／空なら「接続を確認してください」
+  function onBuy() {
+    dlog('onBuy', { purchasing, hasProduct: hasProduct(), products, tickets: ensure() });
+    if (purchasing || buyWait) return;
+    if (hasProduct()) { sendPurchase(); return; }
+    openBusy('ticketConnecting');
+    const sent = toNative({ type: 'get_products' });
+    dlog('get_products sent (buy)', { sent });
+    if (!sent) { openFail('ticketNoConnection'); return; }
+    buyWait = setTimeout(() => { buyWait = null; dlog('get_products: timeout'); openFail('ticketNoConnection'); }, BUY_WAIT_MS);
   }
   function resetDiagnosis() { revealUsedThisDiag = false; }
 
