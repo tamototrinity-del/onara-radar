@@ -457,7 +457,8 @@
   .reveal-body { width:100%; display:flex; flex-direction:column; align-items:center; }
   /* 更新①：帳面「きょうの音」。名簿と同じ黒帯・クリーム地。行は時刻／音階／6軸の要約 */
   .ledger-list { padding:12px 16px calc(24px + var(--sab)); max-width:520px; margin:0 auto; }
-  .ledger-row { display:grid; grid-template-columns:48px 1fr 14px; align-items:center; gap:10px; background:#fff; border:1px solid #e0ddd8; border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+  .ledger-row { display:grid; grid-template-columns:44px minmax(0,1fr) auto 12px; align-items:center; gap:8px; background:#fff; border:1px solid #e0ddd8; border-radius:10px; padding:10px 10px 10px 12px; margin-bottom:8px; cursor:pointer; }
+  .ledger-row > div:nth-child(2) { min-width:0; overflow:hidden; }
   .ledger-row:active { background:#f3efe9; }
   .ledger-time { font-size:13px; font-weight:700; color:#2a2a2a; font-variant-numeric:tabular-nums; }
   .ledger-main { display:flex; align-items:baseline; gap:12px; white-space:nowrap; }
@@ -467,6 +468,19 @@
   .ledger-specs b { color:#2a2a2a; font-weight:700; margin-right:2px; }
   .ledger-specs span { margin-right:10px; }
   .ledger-arrow { color:#b5aea4; font-size:16px; text-align:right; }
+  /* ビルド8：行の右端「›」の左に「姿を見る」の小ボタン */
+  .ledger-reveal { background:#2a2a2a; color:#fff; border:none; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:0.02em; padding:6px 9px; white-space:nowrap; cursor:pointer; }
+  .ledger-reveal:active { background:#555; }
+  /* ビルド8：コンプリートの一言。チュートリアルと同じ空＋吹き出し。少し大きめ・きらめき多め・一度きり */
+  #complete-overlay { z-index:52; display:none; flex-direction:column; align-items:center; justify-content:center; padding:calc(24px + var(--sat)) 20px calc(24px + var(--sab));
+    background: url('sky-plain.jpg') center center / cover no-repeat,
+      linear-gradient(180deg, #3f78b8 0%, #6fa3d4 42%, #a8cde8 74%, #d6e9f6 100%); }
+  #complete-overlay.show { display:flex; }
+  .cp-bubble { font-size:21px; line-height:1.7; max-width:360px; padding:20px 22px; }
+  .cp-pofu { width:270px; height:auto; display:block; margin-top:22px; }
+  .cp-spark { position:absolute; width:26px; height:26px; fill:none; stroke:#fff; stroke-width:1.6; stroke-linejoin:round; opacity:0.95; pointer-events:none; }
+  .cp-stage { position:relative; display:flex; flex-direction:column; align-items:center; }
+  .cp-hint { font-size:12px; color:#1B3A5C; margin-top:18px; letter-spacing:0.08em; }
   .ledger-empty { text-align:center; font-size:13px; color:#8a8378; letter-spacing:0.06em; padding:48px 0; }
   /* 更新①：診断中の「やめる」。画面下寄り、白の文字だけ */
   /* 位置は波形の箱の下（箱 top calc(-40.526vw + 50vh)、高さ132）。雲の帯に掛からない青地 */
@@ -612,6 +626,20 @@
 </div>
 
 <!-- チュートリアル（初回起動のみ：welcomed===false）。4枚、画面タップで次へ、4枚目のみ［探す］ -->
+<!-- ビルド8：友だち一覧 12枠コンプリートの一言（一度きり。どこをタップしても閉じる） -->
+<div class="overlay" id="complete-overlay">
+  <div class="cp-stage">
+    <svg class="cp-spark" style="left:-26px; top:-6px;" viewBox="0 0 24 24"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>
+    <svg class="cp-spark" style="right:-30px; top:26px; width:20px; height:20px;" viewBox="0 0 24 24"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>
+    <svg class="cp-spark" style="left:-10px; bottom:92px; width:18px; height:18px;" viewBox="0 0 24 24"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>
+    <svg class="cp-spark" style="right:-16px; bottom:40px;" viewBox="0 0 24 24"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>
+    <svg class="cp-spark" style="left:34px; bottom:-6px; width:16px; height:16px;" viewBox="0 0 24 24"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>
+    <div class="tut-bubble cp-bubble" id="complete-text"></div>
+    <img class="cp-pofu" src="pofu-v2.png" width="1430" height="1306" alt="ポフ">
+  </div>
+  <div class="cp-hint" data-i18n="completeHint"></div>
+</div>
+
 <div class="overlay" id="tutorial-overlay">
   <div class="tut-bubble" id="tut-text"></div>
   <img class="tut-pofu" src="pofu-v2.png" width="1430" height="1306" alt="ポフ"><!-- 透過の新原画。表示幅220pxは据え置き（高さ 205→201px） -->
@@ -680,7 +708,12 @@ const STR = {
     ledgerEmpty:   'まだありません',
     ledgerRefreshed: '情報が更新されました',
     ledgerHeadCount: n => `${n} / 7`,
+    ledgerAxisShort: ['大','長','湿','重','キ','安'],   // 帳面の行の1字ラベル（375幅で「姿を見る」ボタンと同居させるため）
     btnCancelRec:  'やめる',
+    ledgerReveal:  '姿を見る',                       // 帳面の行の小ボタン（ビルド8）
+    completeLine1: 'まずは全員そろったよ',            // 友だち一覧 12枠コンプリート（一度きり）
+    completeLine2: 'ありがとう',
+    completeHint:  'タップで閉じる',
     revealMsg:     'あなたの中の友だちが姿を現しました',
     btnRegister:   '記録する',
     btnShare:      '📤 シェア',
@@ -807,6 +840,20 @@ const PERIOD_TYPE_LO = 0.33;  // これ未満→野良（間→王女）
 let audioCtx, analyser, source, stream;
 let noiseFloorDb = -60;
 let state = 'idle'; // idle | measuring | waiting | recording | done
+// 録音の診断ログ（2026-10-18、ビルド8）：2回目の診断で音を検知しない件の切り分け用。
+// アプリ内では web_log としてネイティブの iap-log.txt に追記される（LOG_TO_FILE。5回タップで読む）。Web 単体では console のみ。
+// 1診断あたり start / noise / end の3行＋発生時だけ ev 行（トラックの mute/unmute/ended、AudioContext の statechange）。原因確定後に削除可
+let recSeq = 0, recMaxRms = 0, prevCtxCount = 0;
+function recLog(tag, data) {
+  let line = '[web-rec] #' + recSeq + ' ' + tag;
+  if (data !== undefined) { try { line += ' ' + JSON.stringify(data); } catch (e) { line += ' [unserializable]'; } }
+  try { console.log(line); } catch (e) {}
+  try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line })); } catch (e) {}
+}
+function recSnap() {   // 現在の AudioContext / トラックの状態（end 行用）
+  const tr = stream && stream.getAudioTracks ? stream.getAudioTracks() : [];
+  return { ctx: audioCtx ? audioCtx.state : null, tracks: tr.length, ready: tr[0] ? tr[0].readyState : null, muted: tr[0] ? tr[0].muted : null, maxDb: +rmsToDb(recMaxRms).toFixed(1) };
+}
 
 const btnStart  = document.getElementById('btn-start');
 const recInd    = document.getElementById('rec-indicator');
@@ -1173,6 +1220,7 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
 // 更新①：診断中のキャンセル。ループは state==='idle' で抜け、その後の処理は diagCancelled で止める
 let diagCancelled = false;
 function finishCancel() {
+  recLog('end path=cancel', recSnap());
   try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   levelWrap.style.display = 'none';
   Scope.stop();
@@ -1205,6 +1253,16 @@ btnStart.addEventListener('click', async () => {
     analyser.smoothingTimeConstant = 0.5;
     source.connect(analyser);
 
+    // 録音の診断ログ：開始時の状態。古いセッションの ctx／トラックで起きたイベントも、その番号付きで記録される
+    recSeq++; recMaxRms = 0;
+    {
+      const seq = recSeq, ctx = audioCtx, tr = stream.getAudioTracks()[0];
+      recLog('start', { ctx: ctx.state, sr: ctx.sampleRate, tracks: stream.getAudioTracks().length, ready: tr ? tr.readyState : null, muted: tr ? tr.muted : null, enabled: tr ? tr.enabled : null, prevCtxOpen: prevCtxCount });
+      ctx.onstatechange = () => recLog('ev ctx#' + seq + ' statechange=' + ctx.state);
+      if (tr) { tr.onmute = () => recLog('ev track#' + seq + ' mute'); tr.onunmute = () => recLog('ev track#' + seq + ' unmute'); tr.onended = () => recLog('ev track#' + seq + ' ended'); }
+      prevCtxCount++;   // close() を呼んでいないので、作った数＝生きている数
+    }
+
     const fftData  = new Float32Array(analyser.frequencyBinCount);
     const timeData = new Float32Array(analyser.fftSize);
 
@@ -1221,6 +1279,7 @@ btnStart.addEventListener('click', async () => {
         analyser.getFloatTimeDomainData(timeData);
         const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
         noiseRMSList.push(rms);
+        if (rms > recMaxRms) recMaxRms = rms;
         const pct = Math.min(100, ((Date.now() - measureStart) / 2000) * 100);
         levelFill.style.width = pct + '%';
         if (Date.now() - measureStart < 2000) requestAnimationFrame(measureLoop);
@@ -1233,6 +1292,7 @@ btnStart.addEventListener('click', async () => {
     noiseFloorDb = rmsToDb(noiseRMS);
     // 本体候補のしきい値＝ノイズフロア+BODY.MARGIN_DB（環境音・小音では超えない水準）
     const bodyThreshold = noiseRMS * Math.pow(10, BODY.MARGIN_DB / 20);
+    recLog('noise', { frames: noiseRMSList.length, noiseDb: +noiseFloorDb.toFixed(1), thrDb: +rmsToDb(bodyThreshold).toFixed(1), maxDbMeasure: +rmsToDb(recMaxRms).toFixed(1), ctx: audioCtx.state });
 
     if (diagCancelled) { finishCancel(); return; }   // 更新①：計測中に「やめる」
     // ---- Phase 2: 待機 ----
@@ -1292,6 +1352,7 @@ btnStart.addEventListener('click', async () => {
         analyser.getFloatFrequencyData(fftData);
 
         const rms = Math.sqrt(timeData.reduce((s, x) => s + x * x, 0) / timeData.length);
+        if (rms > recMaxRms) recMaxRms = rms;
         levelFill.style.width = Math.min(100, (rms / bodyThreshold) * 60) + '%';
 
         if (!isRecording) {
@@ -1344,6 +1405,7 @@ btnStart.addEventListener('click', async () => {
     if (diagCancelled) { finishCancel(); return; }   // 更新①：待機・録音中に「やめる」（帳面には入れない）
     state = 'done';
     Scope.endBody();
+    recLog('end path=' + (sessionScores ? 'normal' : 'sukashi'), recSnap());
 
     // クリーンアップ
     stream.getTracks().forEach(t => t.stop());
@@ -1369,6 +1431,7 @@ btnStart.addEventListener('click', async () => {
     displayResult(sessionScores);
 
   } catch (e) {
+    recLog('end path=error ' + String(e && (e.name + ': ' + e.message) || e), recSnap());
     setStatus(t('errMicDenied'), 'status-error');
     Scope.stop();
     setRecordingUI(false);
@@ -1602,17 +1665,25 @@ const Ledger = (function () {
     }
     list.innerHTML = o.rows.map(r => {
       const hl = r.hilow > 0 ? 'Hi' : r.hilow < 0 ? 'Low' : '';
-      const L = t('radarLabels');   // 短い軸名（レーダーと同じ：大きさ／長さ／湿り気／重厚感／キレ／安定感）
+      const S = t('ledgerAxisShort'); // 1字ラベル（大／長／湿／重／キ／安）。375幅で「姿を見る」ボタンと同居させるため
       return `<div class="ledger-row" data-id="${xesc(r.id)}">
         <div class="ledger-time">${fmtTime(r.at)}</div>
         <div>
           <div class="ledger-main"><span class="ledger-note">${xesc(NOTES[r.noteIdx])}${hl ? `<small>${hl}</small>` : ''}</span>
-            <span class="ledger-specs"><span><b>${xesc(L[0])}</b>${xesc(fmtDb(r.dbVal))}</span><span><b>${xesc(L[1])}</b>${(+r.durationSec).toFixed(2)} s</span></span></div>
-          <div class="ledger-specs"><span><b>${xesc(L[2])}</b>${r.wet}</span><span><b>${xesc(L[3])}</b>${r.heavy}</span><span><b>${xesc(L[4])}</b>${r.sharp}</span><span><b>${xesc(L[5])}</b>${r.stable}</span></div>
+            <span class="ledger-specs"><span><b>${xesc(S[0])}</b>${xesc(fmtDb(r.dbVal))}</span><span><b>${xesc(S[1])}</b>${(+r.durationSec).toFixed(2)} s</span></span></div>
+          <div class="ledger-specs"><span><b>${xesc(S[2])}</b>${r.wet}</span><span><b>${xesc(S[3])}</b>${r.heavy}</span><span><b>${xesc(S[4])}</b>${r.sharp}</span><span><b>${xesc(S[5])}</b>${r.stable}</span></div>
         </div>
+        <button class="ledger-reveal" data-id="${xesc(r.id)}">${xesc(t('ledgerReveal'))}</button>
         <div class="ledger-arrow">›</div></div>`;
     }).join('');
     list.querySelectorAll('.ledger-row').forEach(el => el.addEventListener('click', () => openRow(el.dataset.id)));
+    list.querySelectorAll('.ledger-reveal').forEach(el => el.addEventListener('click', (e) => { e.stopPropagation(); openRowReveal(el.dataset.id); }));
+  }
+  // ビルド8：行の「姿を見る」→ 同じ結果画面を開き、そのままチケット確認へ。消費で3ページ目（姿）、取り消しは帳面へ戻る
+  function openRowReveal(id) {
+    const r = rows().find(x => x.id === id); if (!r) return;
+    openRow(id);
+    OnaraTickets.requestReveal({ onCancel: () => closeResult() });
   }
   function refreshCount() {
     const n = ensureToday().rows.length, el = document.getElementById('ledger-count');
@@ -1715,9 +1786,20 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); flashReg(t('recorded', ANIMALS[zi])); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); if(!maybeComplete()) flashReg(t('recorded', ANIMALS[zi])); }
   else { openSwap(zi, entry, dex[zi]); }
 }
+// ビルド8：友だち一覧の12枠がすべて埋まった最初の「記録する」の直後に、ポフの一言を一度だけ出す。
+// 既に12枠埋まっている既存ユーザーも、次の「記録する」（登録／入替）で一度出る。表示済みは onara.complete に保存
+const COMPLETE_KEY = 'onara.complete';
+function maybeComplete(){
+  const dex = dexLoad(); if(!dex.every(Boolean)) return false;
+  try { if(localStorage.getItem(COMPLETE_KEY)) return false; localStorage.setItem(COMPLETE_KEY, '1'); } catch(e){ return false; }
+  document.getElementById('complete-text').innerHTML = [t('completeLine1'), t('completeLine2')].map(l=>`<span class="tut-line">${xesc(l)}</span>`).join('');
+  document.getElementById('complete-overlay').classList.add('show');
+  return true;
+}
+document.getElementById('complete-overlay').addEventListener('click', ()=>document.getElementById('complete-overlay').classList.remove('show'));
 function flashReg(msg){ const el=document.getElementById('log-status'); if(el) el.textContent=msg; }
 
 let swapCtx = null;
@@ -1732,7 +1814,7 @@ function openSwap(zi, newEntry, curEntry){
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); if(!maybeComplete()) flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
   swapCtx=null;
 }
 
@@ -2030,7 +2112,12 @@ window.OnaraTickets = (function () {
     const cb = document.getElementById('ticket-close'); cb.disabled = false;
     setBtns(false, true); ov().classList.add('show');
   }
-  function close() { noneOpen = false; if (buyWait) { clearTimeout(buyWait); buyWait = null; } ov().classList.remove('show'); pendingReveal = null; document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false; }
+  function close() {
+    noneOpen = false; if (buyWait) { clearTimeout(buyWait); buyWait = null; }
+    ov().classList.remove('show'); pendingReveal = null;
+    document.getElementById('ticket-buy').disabled = false; document.getElementById('ticket-close').disabled = false;
+    const c = pendingCancel; pendingCancel = null; if (c) c();   // 帳面の行から来て消費しなかった → 帳面へ
+  }
   // 2ページ目「姿を見る」
   // 更新①：3ページ目の門から。消費したら門を閉じて姿を出し、帳面からその行を消す
   function showRevealed() {
@@ -2039,16 +2126,18 @@ window.OnaraTickets = (function () {
     if (lastScores && lastScores.id) { Ledger.remove(lastScores.id); }
     goPage(2);
   }
-  function requestReveal() {
-    if (revealUsedThisDiag) { showRevealed(); return; }     // 同一診断内は再確認なし
+  let pendingCancel = null;         // ビルド8：帳面の行から来たとき、取り消し／閉じるで帳面へ戻る
+  function requestReveal(opts) {
+    pendingCancel = (opts && opts.onCancel) || null;
+    if (revealUsedThisDiag) { pendingCancel = null; showRevealed(); return; }     // 同一診断内は再確認なし
     const n = total();
     if (n > 0) { pendingReveal = showRevealed; openUse(n); }
     else openNone();
   }
   function onUse() {
-    if (!consume()) { close(); openNone(); return; }
+    if (!consume()) { const c = pendingCancel; pendingCancel = null; close(); pendingCancel = c; openNone(); return; }
     revealUsedThisDiag = true;
-    const go = pendingReveal; close(); if (go) go();
+    const go = pendingReveal; pendingCancel = null; close(); if (go) go();
   }
   function sendPurchase() {
     const sent = toNative({ type: 'purchase', productId: TICKET_PRODUCT_ID });
