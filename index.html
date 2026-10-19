@@ -804,7 +804,13 @@ const NOISE_MARGIN_DB = 12;    // （旧）ノイズフロア+これ以上で本
 
 // ===== 本体判定のしきい値（環境音で発火させないよう締める。実機調整前提で1箇所に集約）=====
 const BODY = {
-  MARGIN_DB:   20,    // ノイズフロア+この量[dB]を超えた音だけ本体候補（従来+12dB＝誤発火の主因を引き上げ）
+  MARGIN_DB:   20,    // ノイズフロア+この量[dB]を超えた音だけ本体候補（従来+12dB＝誤発火の主因を引き上げ）。
+                      // 2026-10-19 見直し：床を下位パーセンタイルにしたので基準そのものが静かな側へ下がる。余裕は据え置き（誤発火対策を崩さない）
+  // 床（ノイズフロア）の推定（2026-10-19）：計測2秒の平均は、端末の持ち替え・衣擦れ・直前の操作音など一過性の音で持ち上がり、
+  // しきい値が届かない高さになる（2回目の診断で音を検知しない件）。静かな側のパーセンタイルで推定し、上下限に収める
+  FLOOR_PCT:    0.2,  // 計測フレームの RMS を昇順に並べ、この位置（下位20%）の値を床にする
+  FLOOR_MIN_DB: -70,  // 床の下限[dBFS]。ノイズ抑制でほぼ無音のときにしきい値が極端に低くならないように
+  FLOOR_MAX_DB: -40,  // 床の上限[dBFS]。これより騒がしくても床はここまで（しきい値の上限 = FLOOR_MAX_DB + MARGIN_DB = -20 dBFS）
   MIN_DUR_SEC: 0.18,  // 本体の最短継続。これ未満は本体とみなさない（→候補は破棄して待機継続）
   CONFIRM_MS:  130,   // 検知→本体確定までの猶予。積算でこの時間 超過が続いたら確定して赤枠を出す
   SILENCE_MS:  800,   // 録音中の無音がこの実時間[ms]続いたら候補を締める（フレーム数非依存。出だし→間→本体を1回に収める長さ）
@@ -1000,6 +1006,7 @@ const Scope = (function () {
 function rmsToDb(rms) {
   return rms < 1e-9 ? -100 : 20 * Math.log10(rms);
 }
+function dbToRms(db) { return Math.pow(10, db / 20); }
 
 // FFTデータから基音検出（50〜200Hz）
 function detectFundamental(fftData, sampleRate, fftSize) {
@@ -1219,11 +1226,21 @@ function calcScores(recordedBuffer, sampleRate, fftSnapshot, peakSampleIndex) {
 // ---- メイン処理 ----
 // 更新①：診断中のキャンセル。ループは state==='idle' で抜け、その後の処理は diagCancelled で止める
 let diagCancelled = false;
+// AudioContext の衛生（2026-10-19）：診断ごとに作る AudioContext を全経路（通常・すかし・やめる・エラー）で閉じ、ノードも外す。
+// 従来は close() を呼ばず、診断のたびに生きた ctx が積み上がっていた。Scope.stop() の後に呼ぶ（波形ループが analyser を参照するため）
+function releaseAudio() {
+  try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { if (source) source.disconnect(); } catch (e) {}
+  try { if (analyser) analyser.disconnect(); } catch (e) {}
+  const c = audioCtx;
+  if (c && c.state !== 'closed') { try { c.close().then(() => { prevCtxCount = Math.max(0, prevCtxCount - 1); }).catch(() => {}); } catch (e) {} }
+  stream = null; source = null; analyser = null; audioCtx = null;
+}
 function finishCancel() {
   recLog('end path=cancel', recSnap());
-  try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {}
   levelWrap.style.display = 'none';
   Scope.stop();
+  releaseAudio();
   hideStatus();
   showPofu(true);
   setRecordingUI(false);
@@ -1245,22 +1262,27 @@ btnStart.addEventListener('click', async () => {
   hideSukashi();
 
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // AudioContext はユーザー操作（このクリック）の中で同期的に作る。await の後だと操作外の生成になり、WebKit では suspended で始まることがある
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    prevCtxCount++;   // releaseAudio() の close 完了で減る＝生きている ctx の数
+    recSeq++; recMaxRms = 0;   // 診断番号はここで進める（getUserMedia 失敗の end 行にも新しい番号が付く）
+    const ctxAtCreate = audioCtx.state;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     source = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.5;
     source.connect(analyser);
+    // 2回目以降に備えて、動いていなければ起こす（suspended／interrupted のまま analyser を読むと無音になる）
+    let resumed = null;
+    if (audioCtx.state !== 'running') { try { await audioCtx.resume(); resumed = audioCtx.state; } catch (e) { resumed = 'resume失敗 ' + String(e && e.message || e); } }
 
     // 録音の診断ログ：開始時の状態。古いセッションの ctx／トラックで起きたイベントも、その番号付きで記録される
-    recSeq++; recMaxRms = 0;
     {
       const seq = recSeq, ctx = audioCtx, tr = stream.getAudioTracks()[0];
-      recLog('start', { ctx: ctx.state, sr: ctx.sampleRate, tracks: stream.getAudioTracks().length, ready: tr ? tr.readyState : null, muted: tr ? tr.muted : null, enabled: tr ? tr.enabled : null, prevCtxOpen: prevCtxCount });
+      recLog('start', { ctx: ctx.state, ctxAtCreate, resumed, sr: ctx.sampleRate, tracks: stream.getAudioTracks().length, ready: tr ? tr.readyState : null, muted: tr ? tr.muted : null, enabled: tr ? tr.enabled : null, prevCtxOpen: prevCtxCount - 1 });
       ctx.onstatechange = () => recLog('ev ctx#' + seq + ' statechange=' + ctx.state);
       if (tr) { tr.onmute = () => recLog('ev track#' + seq + ' mute'); tr.onunmute = () => recLog('ev track#' + seq + ' unmute'); tr.onended = () => recLog('ev track#' + seq + ' ended'); }
-      prevCtxCount++;   // close() を呼んでいないので、作った数＝生きている数
     }
 
     const fftData  = new Float32Array(analyser.frequencyBinCount);
@@ -1288,11 +1310,15 @@ btnStart.addEventListener('click', async () => {
       requestAnimationFrame(measureLoop);
     });
 
-    const noiseRMS = noiseRMSList.reduce((s, x) => s + x, 0) / noiseRMSList.length;
+    // 床の推定（2026-10-19）：平均ではなく静かな側のパーセンタイル。一過性の音で床が持ち上がらないようにし、FLOOR_MIN_DB〜FLOOR_MAX_DB に収める
+    const sortedRMS = noiseRMSList.slice().sort((a, b) => a - b);
+    const meanRMS = sortedRMS.length ? sortedRMS.reduce((s, x) => s + x, 0) / sortedRMS.length : 0;
+    const pctRMS  = sortedRMS.length ? sortedRMS[Math.min(sortedRMS.length - 1, Math.floor(sortedRMS.length * BODY.FLOOR_PCT))] : 0;
+    const noiseRMS = Math.min(Math.max(pctRMS, dbToRms(BODY.FLOOR_MIN_DB)), dbToRms(BODY.FLOOR_MAX_DB));
     noiseFloorDb = rmsToDb(noiseRMS);
-    // 本体候補のしきい値＝ノイズフロア+BODY.MARGIN_DB（環境音・小音では超えない水準）
+    // 本体候補のしきい値＝床+BODY.MARGIN_DB（環境音・小音では超えない水準）
     const bodyThreshold = noiseRMS * Math.pow(10, BODY.MARGIN_DB / 20);
-    recLog('noise', { frames: noiseRMSList.length, noiseDb: +noiseFloorDb.toFixed(1), thrDb: +rmsToDb(bodyThreshold).toFixed(1), maxDbMeasure: +rmsToDb(recMaxRms).toFixed(1), ctx: audioCtx.state });
+    recLog('noise', { frames: noiseRMSList.length, meanDb: +rmsToDb(meanRMS).toFixed(1), pctDb: +rmsToDb(pctRMS).toFixed(1), floorDb: +noiseFloorDb.toFixed(1), thrDb: +rmsToDb(bodyThreshold).toFixed(1), maxDbMeasure: +rmsToDb(recMaxRms).toFixed(1), ctx: audioCtx.state });
 
     if (diagCancelled) { finishCancel(); return; }   // 更新①：計測中に「やめる」
     // ---- Phase 2: 待機 ----
@@ -1407,10 +1433,10 @@ btnStart.addEventListener('click', async () => {
     Scope.endBody();
     recLog('end path=' + (sessionScores ? 'normal' : 'sukashi'), recSnap());
 
-    // クリーンアップ
-    stream.getTracks().forEach(t => t.stop());
+    // クリーンアップ（トラック停止・ノード切断・AudioContext close）
     levelWrap.style.display = 'none';
     Scope.stop();
+    releaseAudio();
 
     if (!sessionScores) {
       hideStatus();   // WAIT_MS 内に有効な本体を確定できなかった＝すかし（帯もエラーも出さない）
@@ -1434,6 +1460,7 @@ btnStart.addEventListener('click', async () => {
     recLog('end path=error ' + String(e && (e.name + ': ' + e.message) || e), recSnap());
     setStatus(t('errMicDenied'), 'status-error');
     Scope.stop();
+    releaseAudio();
     setRecordingUI(false);
     btnStart.disabled = false;
     state = 'idle';
