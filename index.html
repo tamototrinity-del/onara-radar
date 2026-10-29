@@ -1738,11 +1738,25 @@ const NoteLog = (function () {
 })();
 const DEX_TYPECOL = { '王子':'#4f79c8', '王女':'#d46a94', '野良':'#7a8a7a' };
 
+// 友だち一覧の診断ログ（1.1.1、2026-10-30）：一覧が空になった報告の切り分け用。起動時・保存時の件数と、保存値があるのに読めなかった事実を残す
+function dexLog(tag, data) {
+  let line = '[web-dex] ' + tag; if (data !== undefined) { try { line += ' ' + JSON.stringify(data); } catch (e) { line += ' [unserializable]'; } }
+  try { console.log(line); } catch (e) {}
+  try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line })); } catch (e) {}
+}
 function dexLoad() {
-  try { const a = JSON.parse(localStorage.getItem(DEX_KEY)); if (Array.isArray(a) && a.length === 12) return a; } catch (e) {}
+  let raw = null;
+  try { raw = localStorage.getItem(DEX_KEY); const a = JSON.parse(raw); if (Array.isArray(a) && a.length === 12) return a; } catch (e) {}
+  // 保存値が無いなら新規。保存値があるのに配列12でない／JSON でない → 空として扱われる（この事実だけログに残す。消しはしない）
+  if (raw != null) dexLog('load invalid', { len: raw.length, head: String(raw).slice(0, 40) });
   return new Array(12).fill(null);
 }
-function dexSave(dex) { try { localStorage.setItem(DEX_KEY, JSON.stringify(dex)); } catch (e) {} }
+function dexCount() { try { const a = JSON.parse(localStorage.getItem(DEX_KEY)); return Array.isArray(a) ? a.filter(Boolean).length : null; } catch (e) { return null; } }
+function dexSave(dex, why) {
+  const before = dexCount();
+  try { localStorage.setItem(DEX_KEY, JSON.stringify(dex)); } catch (e) { dexLog('save failed ' + String(e && e.name || e), { why }); }
+  dexLog('save', { why: why || '?', before, after: dexCount() });
+}
 function scoreToEntry(s) {
   return { size:s.size, length:s.length, wet:s.wet, heavy:s.heavy, sharp:s.sharp, stable:s.stable,
     noteIdx:s.noteIdx, hilow:s.hilow, type:s.type, period:s.period, hz:+(s.hz||0),
@@ -1774,7 +1788,7 @@ function refreshDexGrid() {
     grid.appendChild(cell);
   }
 }
-function openDex(){ refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
+function openDex(){ dexLog('open', { n: dexCount() }); refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
 // 隠し導線（ビルド25）：友だち一覧のタイトルを 2秒以内に5回タップ → ネイティブが iap-log.txt を共有シートで出す。
 // 見た目は変えない。Web 単体（ブリッジなし）では何も起きない。
 (function () {
@@ -1813,7 +1827,7 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex); if(!maybeComplete()) flashReg(t('recorded', ANIMALS[zi])); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex, 'register'); if(!maybeComplete()) flashReg(t('recorded', ANIMALS[zi])); }
   else { openSwap(zi, entry, dex[zi]); }
 }
 // ビルド8：友だち一覧の12枠がすべて埋まった最初の「記録する」の直後に、ポフの一言を一度だけ出す。
@@ -1841,7 +1855,7 @@ function openSwap(zi, newEntry, curEntry){
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex); if(!maybeComplete()) flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex, 'swap'); if(!maybeComplete()) flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
   swapCtx=null;
 }
 
@@ -1967,6 +1981,7 @@ document.getElementById('btn-dex-open').addEventListener('click', openDex);
 document.getElementById('btn-ledger-open').addEventListener('click', () => Ledger.open());
 document.getElementById('ledger-close').addEventListener('click', () => Ledger.close());
 Ledger.ensureToday(); Ledger.refreshCount();   // 起動時：日付判定と件数
+dexLog('startup', { n: dexCount(), raw: (() => { try { const r = localStorage.getItem(DEX_KEY); return r == null ? null : r.length; } catch (e) { return 'err'; } })(), keys: (() => { try { return Object.keys(localStorage).sort(); } catch (e) { return 'err'; } })() });   // 1.1.1：友だち件数・保存値の長さ・キー一覧
 document.getElementById('dex-close').addEventListener('click', closeDex);
 document.getElementById('detail-close').addEventListener('click', closeDetail);
 document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
