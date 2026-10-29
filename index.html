@@ -610,6 +610,16 @@
   </div>
 </div>
 
+<!-- 1.1.1：姿を見たのに未記録のまま結果画面を閉じるときの確認（チケットダイアログと同じ様式。文字は辞書） -->
+<div class="overlay" id="closeconf-overlay">
+  <div class="swap-box">
+    <div class="swap-title" data-i18n="closeUnrecTitle"></div>
+    <div class="swap-btns">
+      <button class="btn" id="closeconf-yes" data-i18n="closeUnrecYes" style="background:#2a2a2a;color:#fff;"></button>
+      <button class="btn btn-reset" id="closeconf-no" data-i18n="closeUnrecNo"></button>
+    </div>
+  </div>
+</div>
 <!-- チケット確認ダイアログ（2ページ目「姿を見る」で表示。既存の入れ替えダイアログと同じ様式） -->
 <div class="overlay" id="ticket-overlay">
   <div class="swap-box">
@@ -731,6 +741,9 @@ const STR = {
     // --- チケット（内核・事務トーン）---
     ticketUse:       '使う',
     ticketCancel:    'やめる',
+    closeUnrecTitle: '記録せずに閉じますか',          // 1.1.1：姿を見た（チケット消費済み）のに未記録で結果画面を閉じるとき
+    closeUnrecYes:   '記録せずに閉じる',
+    closeUnrecNo:    'やめる',
     ticketNoneTitle: 'チケットがありません。明日1枚届きます。',
     ticketClose:     '閉じる',
     ticketBuy:       '購入する',
@@ -1483,10 +1496,18 @@ function closeResult() {
   drawMouseDefault();
   const back = resultFromLedger; resultFromLedger = false;
   lastScores = null;                                       // 閉じたら「姿を見た状態」も消える
+  revealedUnrecorded = false;
   Ledger.refreshCount();
   if (back) Ledger.open();
 }
-btnReset.addEventListener('click', closeResult);
+// 1.1.1：姿を見た（チケット消費済み）のに未記録のまま閉じようとしたら確認を1つ挟む。記録／入替で false、新しい結果で false
+let revealedUnrecorded = false;
+btnReset.addEventListener('click', () => {
+  if (revealedUnrecorded) document.getElementById('closeconf-overlay').classList.add('show');
+  else closeResult();
+});
+document.getElementById('closeconf-yes').addEventListener('click', () => { document.getElementById('closeconf-overlay').classList.remove('show'); closeResult(); });
+document.getElementById('closeconf-no').addEventListener('click', () => document.getElementById('closeconf-overlay').classList.remove('show'));
 
 // ===== 診断結果の3ページスライダー =====
 let curPage = 0;
@@ -1536,6 +1557,7 @@ function displayResult(s) {
   // 更新①：門を閉じた状態（姿は未表示）で開く。帳面から開き直したときも同じ
   document.getElementById('reveal-gate').style.display = '';
   document.getElementById('reveal-body').style.display = 'none';
+  revealedUnrecorded = false;                               // 1.1.1：新しい結果＝まだ姿を見ていない
   const resetBtn = document.getElementById('btn-reset');
   resetBtn.textContent = t(resultFromLedger ? 'ledgerBack' : 'btnReset');
   document.getElementById('result').style.display = 'block';
@@ -1756,6 +1778,7 @@ function dexSave(dex, why) {
   const before = dexCount();
   try { localStorage.setItem(DEX_KEY, JSON.stringify(dex)); } catch (e) { dexLog('save failed ' + String(e && e.name || e), { why }); }
   dexLog('save', { why: why || '?', before, after: dexCount() });
+  Backup.push();   // 1.1.1：保存のたびにネイティブへ控え
 }
 function scoreToEntry(s) {
   return { size:s.size, length:s.length, wet:s.wet, heavy:s.heavy, sharp:s.sharp, stable:s.stable,
@@ -1827,7 +1850,7 @@ function closeDetail(){ document.getElementById('detail-overlay').classList.remo
 function registerCurrent(){
   if(!lastScores){ return; }
   const zi = lastScores.noteIdx, dex = dexLoad(), entry = scoreToEntry(lastScores);
-  if(!dex[zi]){ dex[zi]=entry; dexSave(dex, 'register'); if(!maybeComplete()) flashReg(t('recorded', ANIMALS[zi])); }
+  if(!dex[zi]){ dex[zi]=entry; dexSave(dex, 'register'); revealedUnrecorded = false; if(!maybeComplete()) flashReg(t('recorded', ANIMALS[zi])); }
   else { openSwap(zi, entry, dex[zi]); }
 }
 // ビルド8：友だち一覧の12枠がすべて埋まった最初の「記録する」の直後に、ポフの一言を一度だけ出す。
@@ -1855,7 +1878,7 @@ function openSwap(zi, newEntry, curEntry){
 }
 function doSwap(yes){
   document.getElementById('swap-overlay').classList.remove('show');
-  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex, 'swap'); if(!maybeComplete()) flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
+  if(yes && swapCtx){ const dex=dexLoad(); dex[swapCtx.zi]=swapCtx.newEntry; dexSave(dex, 'swap'); revealedUnrecorded = false; if(!maybeComplete()) flashReg(t('swapped', ANIMALS[swapCtx.zi])); }
   swapCtx=null;
 }
 
@@ -1981,7 +2004,6 @@ document.getElementById('btn-dex-open').addEventListener('click', openDex);
 document.getElementById('btn-ledger-open').addEventListener('click', () => Ledger.open());
 document.getElementById('ledger-close').addEventListener('click', () => Ledger.close());
 Ledger.ensureToday(); Ledger.refreshCount();   // 起動時：日付判定と件数
-dexLog('startup', { n: dexCount(), raw: (() => { try { const r = localStorage.getItem(DEX_KEY); return r == null ? null : r.length; } catch (e) { return 'err'; } })(), keys: (() => { try { return Object.keys(localStorage).sort(); } catch (e) { return 'err'; } })() });   // 1.1.1：友だち件数・保存値の長さ・キー一覧
 document.getElementById('dex-close').addEventListener('click', closeDex);
 document.getElementById('detail-close').addEventListener('click', closeDetail);
 document.getElementById('btn-dex-register').addEventListener('click', registerCurrent);
@@ -2001,6 +2023,35 @@ const TICKET_WELCOME_FREE = 3;  // チュートリアル完了時に渡す枚数
 const PURCHASE_ENABLED = true;  // 初回リリースから購入あり。ただし［購入する］はネイティブから products を受信済みのときだけ表示
 const TICKET_PRODUCT_ID = 'com.fookear.pofu.tickets_3';  // 新 ASC 記録の消耗型「チケット3枚」¥100。ネイティブ App.js と同じ文字列（価格はダイアログに出さず Apple の購入シートに任せる）
 const TICKET_TXN_KEEP = 50;             // 処理済み transactionId の保持数（冪等化用・直近50件）
+
+// ===== 1.1.1：友だち一覧とチケットのネイティブ控え =====
+// 公開版1.1で WebView の保存領域（localStorage）が iOS 側で消え、友だち一覧が空になった端末があった。
+//  - 保存のたび（dexSave／OnaraTickets.save／チュートリアル完了）と起動時に、保存値の生文字列をそのままネイティブへ送り（type:'backup'）、
+//    ネイティブは Documents/backup.json に書く。
+//  - 起動時はネイティブが控えを window.__pofuBackup として先に注入（injectedJavaScriptBeforeContentLoaded）。
+//    localStorage に当該キーが無いときだけ、その値を戻す（両キー独立）。キーがあれば控えは使わない。
+//  - 復元したら LOG に1行（何件戻したか）。Web 単体（ブリッジなし）では何もしない。
+//  - 置き場所：OnaraTickets の定義より前。OnaraTickets 側は評価中に ensure()→save() でキーを作ることがあるため、復元はそれより先に済ませる
+const Backup = (function () {
+  function raw(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function log(line) { try { console.log(line); } catch (e) {} try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'web_log', line })); } catch (e) {} }
+  function push() {
+    try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'backup', dex: raw(DEX_KEY), tickets: raw(TICKETS_KEY) })); } catch (e) {}
+  }
+  function restore() {
+    const b = window.__pofuBackup; if (!b || typeof b !== 'object') return;
+    const done = [];
+    for (const [k, v, label] of [[DEX_KEY, b.dex, 'dex'], [TICKETS_KEY, b.tickets, 'tickets']]) {
+      if (raw(k) != null || typeof v !== 'string' || !v) continue;
+      try { JSON.parse(v); localStorage.setItem(k, v); done.push(label); } catch (e) {}
+    }
+    if (!done.length) return;
+    let tk = null; try { const t0 = JSON.parse(raw(TICKETS_KEY)); tk = { free: t0.free, paid: t0.paid, welcomed: t0.welcomed }; } catch (e) {}
+    log('[web-backup] restore ' + JSON.stringify({ restored: done, dex: dexCount(), tickets: tk, backupSavedAt: b.savedAt || null }));
+  }
+  return { push, restore };
+})();
+Backup.restore();        // 起動時：保存領域が消えていれば控えから戻す（チケットの ensure() やチュートリアル表示より前）
 
 window.OnaraTickets = (function () {
   let revealUsedThisDiag = false;   // 同一診断内の二重消費防止（診断開始でリセット）
@@ -2024,7 +2075,7 @@ window.OnaraTickets = (function () {
     try { const o = JSON.parse(localStorage.getItem(TICKETS_KEY)); if (o && typeof o === 'object') return o; } catch (e) {}
     return null;
   }
-  function save(t) { try { localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); } catch (e) {} }
+  function save(t) { try { localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); } catch (e) {} Backup.push(); }   // 1.1.1：保存のたびにネイティブへ控え
   function ensure() {
     let t = load();
     if (!t) { t = { free: 0, paid: 0, lastBonusDate: null, welcomed: false, txns: [] }; save(t); }
@@ -2166,6 +2217,7 @@ window.OnaraTickets = (function () {
     document.getElementById('reveal-gate').style.display = 'none';
     document.getElementById('reveal-body').style.display = '';
     if (lastScores && lastScores.id) { Ledger.remove(lastScores.id); }
+    revealedUnrecorded = true;   // 1.1.1：チケットを使って姿を見た。記録するまで閉じる操作に確認が付く
     goPage(2);
   }
   let pendingCancel = null;         // ビルド8：帳面の行から来たとき、取り消し／閉じるで帳面へ戻る
@@ -2245,6 +2297,7 @@ const Tutorial = (function () {
     const tk = OnaraTickets.load();
     tk.welcomed = true; tk.free = TICKET_WELCOME_FREE; tk.lastBonusDate = OnaraTickets._today();
     try { localStorage.setItem(TICKETS_KEY, JSON.stringify(tk)); } catch (e) {}
+    Backup.push();   // 1.1.1
     ov().classList.remove('show');
     OnaraTickets.refreshNotice();
   }
@@ -2267,8 +2320,11 @@ const Tutorial = (function () {
   } catch (e) { post('[web] headers 例外 ' + String(e && e.message || e)); }
 })();
 
+dexLog('startup', { n: dexCount(), raw: (() => { try { const r = localStorage.getItem(DEX_KEY); return r == null ? null : r.length; } catch (e) { return 'err'; } })(), keys: (() => { try { return Object.keys(localStorage).sort(); } catch (e) { return 'err'; } })() });   // 1.1.1：友だち件数・保存値の長さ・キー一覧（復元後）
+
 showPofu(true);          // 初回描画は待機画面＝背景版を敷く（以後は各遷移で showPofu が切り替える）
 OnaraTickets.startup();
+Backup.push();           // 起動時にも控えを送る（一度も保存操作をしない既存ユーザーの分も、次の起動から控えがある状態にする）
 </script>
 </body>
 </html>
