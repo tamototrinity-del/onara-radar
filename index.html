@@ -2,13 +2,15 @@
 <html lang="ja" data-brand="onara"><!-- 看板の切替。Web 版（GitHub Pages）は onara。www ビルド（scripts/build-www.js）が pofu に書き換える -->
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><!-- 2026-11-01：アプリとして拡大は不要。ダブルタップ拡大が5回タップの隠し操作を奪うので止める（WKWebView は user-scalable=no を尊重） -->
 <title>おならレーダー</title>
 <!-- iOSホーム画面追加時のアイコン（アプリアイコン清書版・ポフ） -->
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="appicon/icon-192.png">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { touch-action: manipulation; }   /* 2026-11-01：全画面でダブルタップ拡大を止める（パン・ピンチ以外のジェスチャ無効。タップ遅延も消える） */
+  .notice-reserve, .ov-head .ov-title { touch-action: manipulation; }   /* 5回タップの隠し操作（検証用 wipe／ログ共有）の対象 */
 
   /* 待機画面の書体。Zen Maru Gothic Bold を使用文字40字だけに絞った同梱サブセット（7.5KB／SIL OFL 1.1）。
      含まれない文字は既定の角ゴシックへ落ちるので、この書体を当てるのは文言が固定の箇所に限る。 */
@@ -1814,10 +1816,11 @@ function refreshDexGrid() {
 function openDex(){ dexLog('open', { n: dexCount() }); refreshDexGrid(); document.getElementById('dex-overlay').classList.add('show'); }
 // 隠し導線（ビルド25）：友だち一覧のタイトルを 2秒以内に5回タップ → ネイティブが iap-log.txt を共有シートで出す。
 // 見た目は変えない。Web 単体（ブリッジなし）では何も起きない。
+// 2026-11-01：数えるのは click ではなく pointerup（タップ1回につき1発。実機でダブルタップ拡大に click が食われたため）。PointerEvent が無い環境だけ click
 (function () {
   const el = document.querySelector('#dex-overlay .ov-title'); if (!el) return;
   let n = 0, last = 0;
-  el.addEventListener('click', () => {
+  el.addEventListener(window.PointerEvent ? 'pointerup' : 'click', () => {
     const now = Date.now(); if (now - last > 2000) n = 0; last = now; n += 1;
     if (n >= 5) { n = 0; try { if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'share_log' })); } catch (e) {} }
   });
