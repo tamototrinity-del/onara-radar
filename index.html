@@ -414,6 +414,7 @@
         <div class="reveal-body" id="reveal-body" style="display:none;">
           <div class="reveal-msg" id="reveal-msg" data-i18n="revealMsg"></div>
           <div class="char-stage"><svg id="mouse-svg" width="190" height="190" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg"></svg></div>
+          <button class="voice-btn" id="btn-voice" data-i18n="btnVoice"></button><!-- 1.2：鳴き声。姿が出たとき1回自動で鳴き、以降はこのボタン -->
           <div class="note-zodiac" id="zodiac-display" style="font-size:20px; font-weight:700; color:#2a2a2a; margin-bottom:6px;">—</div>
           <div class="reveal-type" id="reveal-type"></div>
           <button class="btn btn-dex-register" id="btn-dex-register" data-i18n="btnRegister" style="background:#3a6a4a; color:#fff;"></button>
@@ -450,6 +451,11 @@
   .dex-cell.empty { background:#fbfaf8; }
   .dex-cell svg { display:block; margin:0 auto; width:100%; height:auto; }
   .dex-zod { font-size:13px; font-weight:700; margin-top:2px; }
+  /* 1.2 鳴き声：結果3ページ目の「▶ 鳴く」（白地・細枠）と、友だち一覧カード右上の小さな「▶」 */
+  .voice-btn { background:#fff; color:#2a2a2a; border:1.5px solid #2a2a2a; border-radius:999px; font-size:13px; font-weight:700; letter-spacing:0.04em; padding:6px 16px; margin:0 0 8px; cursor:pointer; touch-action:manipulation; }
+  .voice-btn:active { background:#f3efe9; }
+  .dex-voice { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%; border:1px solid #d6d1ca; background:#fff; color:#2a2a2a; font-size:11px; line-height:24px; padding:0; cursor:pointer; z-index:1; touch-action:manipulation; }
+  .dex-voice:active { background:#f3efe9; }
   .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
   /* キャラ出現時の文言 */
   .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 6px; }
@@ -686,8 +692,39 @@ const BRAND_TABLE = {
   pofu:  { str: { docTitle: 'ポフの友だち探し', appTitle: 'ポフの友だち探し',
                   tut1: 'ポフです\n友だちを探しています\nどうやら　友だちは\n音の中に住んでいるようなんです',
                   tut4: 'くれぐれも\nご近所には気をつけてくださいね' },
-           shareUrl: 'fookear.com/pofu', shareFile: 'pofu-tomodachi.png' },
-  onara: { str: {}, shareUrl: 'tamototrinity-del.github.io/onara-radar', shareFile: 'onara-radar.png' },
+           shareUrl: 'fookear.com/pofu', shareFile: 'pofu-tomodachi.png',
+           // 1.2 鳴き声の音色（笛・きゅっ系：高めの音域、三角波／正弦波、息は高域の「きゅっ」）。鳴き方の型は ZODIAC_CALL（共通）
+           //   base=基準ピッチ Hz（Mid・重厚感50のとき）／wave=波形／cut=ローパス Hz／nf=息（ノイズ）の中心 Hz／nq=その Q
+           voice: [
+             { base: 880, wave: 'triangle', cut: 5200, nf: 5200, nq: 1.6 },   // 子：高く軽い
+             { base: 440, wave: 'sine',     cut: 2400, nf: 2600, nq: 1.2 },   // 丑：丸く低め
+             { base: 523, wave: 'triangle', cut: 3200, nf: 3400, nq: 1.4 },   // 寅：太め
+             { base: 988, wave: 'sine',     cut: 5600, nf: 6000, nq: 1.8 },   // 卯：細く高い
+             { base: 587, wave: 'triangle', cut: 3600, nf: 3800, nq: 1.3 },   // 辰：伸びる
+             { base: 784, wave: 'sine',     cut: 4800, nf: 6400, nq: 0.9 },   // 巳：息が主
+             { base: 740, wave: 'triangle', cut: 4400, nf: 4600, nq: 1.5 },   // 午：張りのある
+             { base: 659, wave: 'triangle', cut: 4000, nf: 4200, nq: 1.4 },   // 未：ふるえる
+             { base: 830, wave: 'sine',     cut: 5000, nf: 5400, nq: 1.6 },   // 申：上ずる
+             { base: 698, wave: 'triangle', cut: 4200, nf: 4800, nq: 1.5 },   // 酉：よく通る
+             { base: 622, wave: 'triangle', cut: 3800, nf: 4000, nq: 1.4 },   // 戌：歯切れ
+             { base: 392, wave: 'triangle', cut: 2200, nf: 2400, nq: 1.0 },   // 亥：低く短い
+           ] },
+  onara: { str: {}, shareUrl: 'tamototrinity-del.github.io/onara-radar', shareFile: 'onara-radar.png',
+           // 1.2 鳴き声の音色（ぷぅ系：低い音域、ノコギリ波／矩形波にローパス、息は低域の「ぷぅ」）
+           voice: [
+             { base: 220, wave: 'sawtooth', cut: 1100, nf: 900, nq: 0.8 },    // 子
+             { base:  90, wave: 'sawtooth', cut:  500, nf: 300, nq: 0.7 },    // 丑
+             { base: 130, wave: 'sawtooth', cut:  700, nf: 420, nq: 0.8 },    // 寅
+             { base: 240, wave: 'square',   cut: 1200, nf: 1000, nq: 0.9 },   // 卯
+             { base: 110, wave: 'sawtooth', cut:  650, nf: 380, nq: 0.7 },    // 辰
+             { base: 180, wave: 'sawtooth', cut:  900, nf: 1400, nq: 0.5 },   // 巳
+             { base: 170, wave: 'sawtooth', cut:  950, nf: 700, nq: 0.8 },    // 午
+             { base: 160, wave: 'square',   cut:  850, nf: 650, nq: 0.8 },    // 未
+             { base: 200, wave: 'sawtooth', cut: 1050, nf: 800, nq: 0.8 },    // 申
+             { base: 190, wave: 'square',   cut: 1000, nf: 760, nq: 0.9 },    // 酉
+             { base: 150, wave: 'sawtooth', cut:  800, nf: 600, nq: 0.8 },    // 戌
+             { base:  85, wave: 'sawtooth', cut:  450, nf: 260, nq: 0.6 },    // 亥
+           ] },
 };
 const STR = {
   ja: {
@@ -728,6 +765,8 @@ const STR = {
     completeHint:  'タップで閉じる',
     revealMsg:     'あなたの中の友だちが姿を現しました',
     btnRegister:   '記録する',
+    btnVoice:      '▶ 鳴く',                         // 1.2：結果3ページ目（姿を見た後）の鳴き声ボタン。両看板共通
+    auditionStep:  (n, name) => `試聴 ${n} / 12 ${name}`,   // 1.2：12種順番の試聴（きょうの音の題字5回タップ）
     btnShare:      '📤 シェア',
     btnReset:      'もう一度',
     dexOpen:       '友だち一覧 ›',
@@ -1269,6 +1308,7 @@ document.getElementById('btn-cancel-rec').addEventListener('click', () => {
 btnStart.addEventListener('click', async () => {
   if (state !== 'idle') return;
   diagCancelled = false;
+  Voice.stop();           // 1.2：鳴き声（試聴を含む）が残っていれば止めてから録音へ
   btnStart.disabled = true;
   setRecordingUI(true);   // 「診断開始」を状態表示に差し替える
   setCreamBg(false);      // 診断中は青のまま
@@ -1672,6 +1712,169 @@ function drawRadarEmpty() {
 
 drawRadarEmpty();
 
+// ===== 1.2 友だちの鳴き声（Voice、2026-11-04）=====
+// 診断結果 → 鳴き声。音声ファイルは使わず WebAudio で合成する。同じ結果なら必ず同じ音（乱数は結果のハッシュをシードにする）。
+// 鳴き方の型（ZODIAC_CALL：音節・ピッチの輪郭・ふるえ）は両看板共通。波形・音域・息の色は BRAND_TABLE[BRAND].voice で切り替える。
+// AudioContext はタップの中で作って resume し、鳴り終わったら close（録音側 releaseAudio と同じ作法）。録音中（measuring/waiting/recording）は鳴らさない。
+// どのパラメータが何に効くか：
+//   noteIdx（干支）→ 型と音色 ／ hilow → ピッチ（Low −3・Mid 0・Hi +3 半音）／ heavy → ピッチ（0:+2 → 100:−4 半音）とローパスの開き
+//   durationSec（無ければ length）→ 長さ 0.25〜1.5 s ／ stable → 揺れの深さ（100:±5 → 0:±70 cent）／ wet → 息の混合（0:5% → 100:55%）と帯域
+//   sharp → 立ち上がり（100:5 ms → 0:80 ms）とリリース ／ dbVal（無ければ size）→ 音量 ／ 結果のハッシュ → 揺れの速さ・位相・ノイズ波形
+//   type・period は使わない
+const ZODIAC_CALL = [
+  // syl: 音節の並び。w=長さの重み、p=ピッチの輪郭（半音。等間隔に並べて結ぶ）、trem=ふるえ Hz（省略=なし）
+  // gap=音節の間 s ／ wob=揺れの倍率 ／ breath=息の上乗せ（0〜1）／ tone=音の成分の倍率
+  { syl: [{ w: 1,   p: [0, 2] },     { w: 1,   p: [4, 7] }],                            gap: 0.06 },                        // 子：短い2音の上昇
+  { syl: [{ w: 1,   p: [2, 0, -3] }],                                                   gap: 0 },                           // 丑：長い1音をゆっくり下げる
+  { syl: [{ w: 1,   p: [-2, 0, -1] }],                                                  gap: 0,    wob: 2.0 },              // 寅：低くうなる（揺れ強め）
+  { syl: [{ w: 1,   p: [5, 7] },     { w: 1,   p: [5, 7] }, { w: 1.2, p: [7, 9] }],      gap: 0.05 },                        // 卯：高い3音
+  { syl: [{ w: 1,   p: [-4, 3, 0, -2] }],                                               gap: 0,    wob: 1.5 },              // 辰：上がって下がる長い1音
+  { syl: [{ w: 1,   p: [0, 0, -1] }],                                                   gap: 0,    breath: 0.4, tone: 0.4 }, // 巳：息が主、ピッチ薄め
+  { syl: [{ w: 1,   p: [9, 7, 2, -3], trem: 14 }],                                      gap: 0 },                           // 午：高→低のグリッサンド＋ふるえ
+  { syl: [{ w: 1,   p: [2, 2, 0], trem: 11 }],                                          gap: 0 },                           // 未：ふるえる1音
+  { syl: [{ w: 0.6, p: [-2, 3] },    { w: 1,   p: [3, 10] }],                           gap: 0.04 },                        // 申：上ずる2音
+  { syl: [{ w: 0.5, p: [0, 1] },     { w: 0.6, p: [7, 8] }, { w: 1.4, p: [4, 5, -1] }],  gap: 0.05 },                        // 酉：低・高・中長の3音節
+  { syl: [{ w: 1,   p: [2, 0, -2] }, { w: 1,   p: [2, 0, -2] }],                        gap: 0.12 },                        // 戌：同じ高さの短い2音
+  { syl: [{ w: 1,   p: [-3, -5] }],                                                     gap: 0,    breath: 0.25 },          // 亥：低く短く息多め
+];
+const Voice = (function () {
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const num = v => typeof v === 'number' && isFinite(v);
+  const MASTER = 0.35;        // 全体の音量（ノコギリ波でも割れない程度）
+  const AUDITION_STEP = 1.9;  // 試聴の間隔 s
+  // 結果 → 32bit ハッシュ（FNV-1a）。並びと丸めを固定して決定的にする
+  function hash(e) {
+    const s = [e.noteIdx, e.hilow, e.size, e.length, e.wet, e.heavy, e.sharp, e.stable, e.durationSec, e.dbVal].map(v => num(v) ? +(+v).toFixed(3) : 'x').join('|');
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  // 鳴き声に要る値が揃っているか（友だち一覧の古い／壊れた記録は標準の声に落とす）
+  function hasParams(e) { return !!e && num(e.noteIdx) && ['wet', 'heavy', 'sharp', 'stable'].every(k => num(e[k])) && (num(e.durationSec) || num(e.length)) && (num(e.dbVal) || num(e.size)); }
+  // 十二支ごとの標準の声（Mid・中庸・0.6 s）
+  function standard(zi) { return { noteIdx: ((Math.round(zi || 0) % 12) + 12) % 12, hilow: 0, size: 60, length: 50, wet: 40, heavy: 50, sharp: 50, stable: 60, durationSec: 0.6, dbVal: -30 }; }
+  // 診断結果 → 鳴き声パラメータ（純関数。console で Voice.params(lastScores) と見れば写像を確かめられる）
+  function params(e) {
+    const zi = ((Math.round(e.noteIdx) % 12) + 12) % 12;
+    const tbl = ((BRAND_TABLE[BRAND] && BRAND_TABLE[BRAND].voice) || BRAND_TABLE.pofu.voice)[zi];
+    const call = ZODIAC_CALL[zi];
+    const heavy = clamp(+e.heavy, 0, 100) / 100, wet = clamp(+e.wet, 0, 100) / 100, sharp = clamp(+e.sharp, 0, 100) / 100, stable = clamp(+e.stable, 0, 100) / 100;
+    const dur = num(e.durationSec) ? lerp(0.25, 1.5, (clamp(e.durationSec, 0.1, 2.0) - 0.1) / 1.9)
+                                   : lerp(0.25, 1.5, clamp(+e.length, 0, 100) / 100);
+    const db = num(e.dbVal) ? clamp(e.dbVal, -50, -10) : lerp(-50, -10, clamp(+e.size, 0, 100) / 100);
+    const h = hash(e), rng = mulberry32(h);
+    return {
+      zi, tbl, call,
+      semi: (num(e.hilow) ? Math.sign(e.hilow) * 3 : 0) + lerp(2, -4, heavy),   // ピッチの全体シフト（半音）
+      cutMul: lerp(1.0, 0.5, heavy),                                            // ローパスの開き（重いほど閉じる）
+      dur,                                                                      // 全体の長さ s（音節の間を含む）
+      wobble: lerp(70, 5, stable) * (call.wob || 1),                            // 揺れの深さ（cent）
+      wobRate: lerp(4, 8, rng()),                                               // 揺れの速さ Hz（ハッシュ由来）
+      breath: clamp(lerp(0.05, 0.55, wet) + (call.breath || 0), 0, 0.9),        // 息の混合比
+      breathQMul: lerp(1.0, 0.45, wet),                                         // 湿るほど息の帯域が広い（Q を下げる）
+      attack: lerp(0.08, 0.005, sharp), release: lerp(0.12, 0.03, sharp),       // 立ち上がり／リリース s
+      gain: lerp(0.45, 1.0, (db + 50) / 40),                                    // 音量
+      tone: call.tone != null ? call.tone : 1,
+      noiseSeed: (h ^ 0x9e3779b9) >>> 0,
+    };
+  }
+  function noiseBuffer(ctx, seed, sec) {
+    const n = Math.ceil(ctx.sampleRate * sec), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0), r = mulberry32(seed);
+    for (let i = 0; i < n; i++) d[i] = r() * 2 - 1;
+    return buf;
+  }
+  // 1体ぶんを t0 から組む。戻り値は鳴り終わる時刻
+  function schedule(ctx, P, t0, out) {
+    const call = P.call, tbl = P.tbl;
+    const wsum = call.syl.reduce((a, s) => a + s.w, 0);
+    const body = Math.max(0.12, P.dur - call.gap * (call.syl.length - 1));
+    const base = tbl.base * Math.pow(2, P.semi / 12);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = tbl.cut * P.cutMul; lp.Q.value = 0.9; lp.connect(out);
+    const nb = ctx.createBufferSource(); nb.buffer = noiseBuffer(ctx, P.noiseSeed, 1.6); nb.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = tbl.nf; bp.Q.value = tbl.nq * P.breathQMul;
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(0.0001, t0);
+    nb.connect(bp); bp.connect(ng); ng.connect(out);
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = P.wobRate;
+    const lg = ctx.createGain(); lg.gain.value = P.wobble; lfo.connect(lg);
+    let t = t0, end = t0;
+    call.syl.forEach(s => {
+      const len = body * s.w / wsum, tEnd = t + len;
+      const a = Math.min(P.attack, len * 0.4), r = Math.min(P.release, len * 0.4), hold = Math.max(t + a, tEnd - r);
+      const osc = ctx.createOscillator(); osc.type = tbl.wave;
+      osc.frequency.setValueAtTime(base * Math.pow(2, s.p[0] / 12), t);
+      for (let k = 1; k < s.p.length; k++) osc.frequency.exponentialRampToValueAtTime(base * Math.pow(2, s.p[k] / 12), t + len * k / (s.p.length - 1));
+      lg.connect(osc.detune);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(P.tone, t + a); g.gain.setValueAtTime(P.tone, hold); g.gain.linearRampToValueAtTime(0.0001, tEnd);
+      if (s.trem) { const to = ctx.createOscillator(); to.frequency.value = s.trem; const tg = ctx.createGain(); tg.gain.value = P.tone * 0.45; to.connect(tg); tg.connect(g.gain); to.start(t); to.stop(tEnd); }
+      osc.connect(g); g.connect(lp);
+      osc.start(t); osc.stop(tEnd + 0.01);
+      ng.gain.setValueAtTime(0.0001, t); ng.gain.linearRampToValueAtTime(P.breath, t + a); ng.gain.setValueAtTime(P.breath, hold); ng.gain.linearRampToValueAtTime(0.0001, tEnd);
+      end = tEnd; t = tEnd + call.gap;
+    });
+    lfo.start(t0); lfo.stop(end + 0.05);
+    nb.start(t0); nb.stop(end + 0.05);
+    return end;
+  }
+  let cur = null, timer = null, aud = null;   // 鳴っている ctx ／ close の予約 ／ 試聴中の状態
+  function canPlay() { return !(state === 'measuring' || state === 'waiting' || state === 'recording'); }
+  function closeCtx(c) { if (c && c.state !== 'closed') { try { c.close().catch(() => {}); } catch (e) {} } }
+  function auditionTitle(text) { const el = document.querySelector('#ledger-overlay .ov-title'); if (el) el.textContent = text != null ? text : t('ledgerTitle'); }
+  function stop() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (aud) { aud.timers.forEach(clearTimeout); aud = null; auditionTitle(null); }
+    const c = cur; cur = null; closeCtx(c);
+  }
+  function makeCtx() {
+    let c = null;
+    try { c = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    if (c.state !== 'running') { try { c.resume().catch(() => {}); } catch (e) {} }
+    return c;
+  }
+  // 1体鳴らす。値が揃わない記録はその干支の標準の声。鳴っている最中なら止めてから
+  function play(e) {
+    if (!e || !canPlay()) return false;
+    stop();
+    const P = params(hasParams(e) ? e : standard(e.noteIdx));
+    const ctx = makeCtx(); if (!ctx) return false;
+    cur = ctx;
+    const master = ctx.createGain(); master.gain.value = P.gain * MASTER; master.connect(ctx.destination);
+    const end = schedule(ctx, P, ctx.currentTime + 0.03, master);
+    timer = setTimeout(() => { timer = null; if (cur === ctx) cur = null; closeCtx(ctx); }, Math.ceil((end - ctx.currentTime + 0.3) * 1000));
+    return true;
+  }
+  // 試聴：12種を標準パラメータで順番に（ctx は1つで通し、最後に close）。進捗は「きょうの音」の題字に出す。もう一度呼ぶと中断
+  function audition() {
+    if (aud) { stop(); return false; }
+    if (!canPlay()) return false;
+    stop();
+    const ctx = makeCtx(); if (!ctx) return false;
+    cur = ctx; aud = { timers: [] };
+    const t0 = ctx.currentTime + 0.05;
+    for (let zi = 0; zi < 12; zi++) {
+      const P = params(standard(zi));
+      const master = ctx.createGain(); master.gain.value = P.gain * MASTER; master.connect(ctx.destination);
+      schedule(ctx, P, t0 + zi * AUDITION_STEP, master);
+      aud.timers.push(setTimeout(() => auditionTitle(t('auditionStep', zi + 1, ANIMALS[zi])), Math.max(0, Math.round((t0 + zi * AUDITION_STEP - ctx.currentTime) * 1000))));
+    }
+    timer = setTimeout(() => { timer = null; aud = null; auditionTitle(null); if (cur === ctx) cur = null; closeCtx(ctx); }, Math.ceil((12 * AUDITION_STEP + 0.5) * 1000));
+    return true;
+  }
+  return { params, play, stop, audition, standard, hasParams };
+})();
+document.getElementById('btn-voice').addEventListener('click', () => { if (lastScores) Voice.play(lastScores); });
+// 隠し導線（1.2）：「きょうの音」の題字を 2秒以内に5回タップ → 12種を標準の声で順番に試聴。もう一度5回で中断。友だち一覧の題字（ログ共有）と同じ数え方
+(function () {
+  const el = document.querySelector('#ledger-overlay .ov-title'); if (!el) return;
+  let n = 0, last = 0;
+  el.addEventListener(window.PointerEvent ? 'pointerup' : 'click', () => {
+    const now = Date.now(); if (now - last > 2000) n = 0; last = now; n += 1;
+    if (n >= 5) { n = 0; Voice.audition(); }
+  });
+})();
+
 // ===== 住人名簿 =====
 const DEX_KEY = 'onara_dex_v1';
 let lastScores = null;
@@ -1804,9 +2007,11 @@ function refreshDexGrid() {
     if (n < recorded.length) {
       const zi = recorded[n].zi, e = recorded[n].e;
       cell.className = 'dex-cell filled';
-      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${typeLabel(e.type)}</div>`;
+      cell.innerHTML = `<button class="dex-voice" type="button">▶</button><svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${typeLabel(e.type)}</div>`;
       renderCharaInto(cell.querySelector('svg'), e, 'dex'+zi);
       cell.onclick = () => openDetail(zi);
+      // 1.2：カード右上の「▶」でその子の声。値が揃わない古い記録は Voice.play 内でその干支の標準の声に落ちる
+      cell.querySelector('.dex-voice').addEventListener('click', ev => { ev.stopPropagation(); Voice.play(e); });
     } else {
       cell.className = 'dex-cell empty';   // 空きは無地の枠のみ（干支名・文言なし）
     }
@@ -2222,6 +2427,7 @@ window.OnaraTickets = (function () {
     if (lastScores && lastScores.id) { Ledger.remove(lastScores.id); }
     revealedUnrecorded = true;   // 1.1.1：チケットを使って姿を見た。記録するまで閉じる操作に確認が付く
     goPage(2);
+    if (lastScores) Voice.play(lastScores);   // 1.2：姿が出たとき1回だけ自動で鳴く（以降は「▶ 鳴く」）。購入直後の経路はタップ外なので鳴らないことがある
   }
   let pendingCancel = null;         // ビルド8：帳面の行から来たとき、取り消し／閉じるで帳面へ戻る
   function requestReveal(opts) {
