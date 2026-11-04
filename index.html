@@ -1820,7 +1820,16 @@ const Voice = (function () {
   }
   let cur = null, timer = null, aud = null;   // 鳴っている ctx ／ close の予約 ／ 試聴中の状態
   function canPlay() { return !(state === 'measuring' || state === 'waiting' || state === 'recording'); }
-  function closeCtx(c) { if (c && c.state !== 'closed') { try { c.close().catch(() => {}); } catch (e) {} } }
+  // サイレントスイッチ対応（2026-11-04）：iOS の WebKit は Web Audio を Ambient 区分で鳴らすので、スイッチが消音だと鳴かない。
+  // アプリ側で AVAudioSession の区分を設定しても WebKit が無視する（WebKit bug 167788）ため、WebKit が用意した Audio Session API で
+  // 鳴く間だけ 'playback'（= AVAudioSessionCategoryPlayback、消音スイッチを無視）にし、鳴り終わったら 'auto' に戻す。
+  // 'playback' の間は録音の区分（PlayAndRecord）に切り替わらないので、録音の前に必ず戻す（btnStart の Voice.stop() がそれ）。
+  // iOS 16.4 以降で有効。無い環境（Chrome・古い iOS）では何もしない＝従来どおり。実機未確認
+  function session(type) { try { const s = navigator.audioSession; if (s && s.type !== type) s.type = type; } catch (e) {} }
+  function closeCtx(c) {
+    if (c && c.state !== 'closed') { try { c.close().catch(() => {}); } catch (e) {} }
+    session('auto');
+  }
   function auditionTitle(text) { const el = document.querySelector('#ledger-overlay .ov-title'); if (el) el.textContent = text != null ? text : t('ledgerTitle'); }
   function stop() {
     if (timer) { clearTimeout(timer); timer = null; }
@@ -1829,7 +1838,8 @@ const Voice = (function () {
   }
   function makeCtx() {
     let c = null;
-    try { c = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    session('playback');   // ctx を作る前に区分を決めておく（鳴り終わりの closeCtx で 'auto' へ）
+    try { c = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { session('auto'); return null; }
     if (c.state !== 'running') { try { c.resume().catch(() => {}); } catch (e) {} }
     return c;
   }
