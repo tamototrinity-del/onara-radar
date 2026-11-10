@@ -451,11 +451,9 @@
   .dex-cell.empty { background:#fbfaf8; }
   .dex-cell svg { display:block; margin:0 auto; width:100%; height:auto; }
   .dex-zod { font-size:13px; font-weight:700; margin-top:2px; }
-  /* 1.2 鳴き声：結果3ページ目の「▶ 鳴く」（白地・細枠）と、友だち一覧カード右上の小さな「▶」 */
+  /* 1.2 鳴き声：結果3ページ目の「▶ 鳴く」（白地・細枠）。帳面の行の「▶」は .ledger-voice（2026-11-10：友だち一覧の▶は外し、きょうの音の行へ移した） */
   .voice-btn { background:#fff; color:#2a2a2a; border:1.5px solid #2a2a2a; border-radius:999px; font-size:13px; font-weight:700; letter-spacing:0.04em; padding:6px 16px; margin:0 0 8px; cursor:pointer; touch-action:manipulation; }
   .voice-btn:active { background:#f3efe9; }
-  .dex-voice { position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%; border:1px solid #d6d1ca; background:#fff; color:#2a2a2a; font-size:11px; line-height:24px; padding:0; cursor:pointer; z-index:1; touch-action:manipulation; }
-  .dex-voice:active { background:#f3efe9; }
   .dex-type { font-size:10px; padding:1px 6px; border-radius:8px; color:#fff; }
   /* キャラ出現時の文言 */
   .reveal-msg { font-size:13px; color:#5a5148; letter-spacing:0.04em; text-align:center; margin:2px 0 6px; }
@@ -469,6 +467,9 @@
   .ledger-row > div:nth-child(2) { min-width:0; overflow:hidden; }
   .ledger-row:active { background:#f3efe9; }
   .ledger-time { font-size:13px; font-weight:700; color:#2a2a2a; font-variant-numeric:tabular-nums; }
+  /* 1.2（2026-11-10）：時刻の下に「▶」。その記録の診断値で鳴く（姿を見る前でも鳴る＝どの友だちかの手がかり）。時刻の列に置くのは 375 幅で諸元を押し出さないため */
+  .ledger-voice { display:block; width:30px; height:22px; margin-top:4px; border-radius:999px; border:1px solid #d6d1ca; background:#fff; color:#2a2a2a; font-size:10px; line-height:20px; padding:0; cursor:pointer; touch-action:manipulation; }
+  .ledger-voice:active { background:#f3efe9; }
   .ledger-main { display:flex; align-items:baseline; gap:12px; white-space:nowrap; }
   .ledger-note { font-size:19px; font-weight:800; color:#2a2a2a; min-width:38px; }
   .ledger-note small { font-size:10px; font-weight:700; color:#8a8378; margin-left:2px; }
@@ -1931,7 +1932,7 @@ const Ledger = (function () {
       const hl = r.hilow > 0 ? 'Hi' : r.hilow < 0 ? 'Low' : '';
       const S = t('ledgerAxisShort'); // 1字ラベル（大／長／湿／重／キ／安）。375幅で「姿を見る」ボタンと同居させるため
       return `<div class="ledger-row" data-id="${xesc(r.id)}">
-        <div class="ledger-time">${fmtTime(r.at)}</div>
+        <div class="ledger-time">${fmtTime(r.at)}<button class="ledger-voice" type="button" data-id="${xesc(r.id)}">▶</button></div>
         <div>
           <div class="ledger-main"><span class="ledger-note">${xesc(NOTES[r.noteIdx])}${hl ? `<small>${hl}</small>` : ''}</span>
             <span class="ledger-specs"><span><b>${xesc(S[0])}</b>${xesc(fmtDb(r.dbVal))}</span><span><b>${xesc(S[1])}</b>${(+r.durationSec).toFixed(2)} s</span></span></div>
@@ -1942,6 +1943,8 @@ const Ledger = (function () {
     }).join('');
     list.querySelectorAll('.ledger-row').forEach(el => el.addEventListener('click', () => openRow(el.dataset.id)));
     list.querySelectorAll('.ledger-reveal').forEach(el => el.addEventListener('click', (e) => { e.stopPropagation(); openRowReveal(el.dataset.id); }));
+    // 1.2（2026-11-10）：行の「▶」→ その記録の診断値で鳴く。行タップ（結果画面）には伝播させない
+    list.querySelectorAll('.ledger-voice').forEach(el => el.addEventListener('click', (e) => { e.stopPropagation(); const r = o.rows.find(x => x.id === el.dataset.id); if (r) Voice.play(r); }));
   }
   // ビルド8：行の「姿を見る」→ 同じ結果画面を開き、そのままチケット確認へ。消費で3ページ目（姿）、取り消しは帳面へ戻る
   function openRowReveal(id) {
@@ -2017,11 +2020,9 @@ function refreshDexGrid() {
     if (n < recorded.length) {
       const zi = recorded[n].zi, e = recorded[n].e;
       cell.className = 'dex-cell filled';
-      cell.innerHTML = `<button class="dex-voice" type="button">▶</button><svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${typeLabel(e.type)}</div>`;
+      cell.innerHTML = `<svg viewBox="-100 -100 200 200"></svg><div class="dex-zod">${ANIMALS[zi]}</div><div class="dex-type" style="background:${DEX_TYPECOL[e.type]||'#999'}">${typeLabel(e.type)}</div>`;
       renderCharaInto(cell.querySelector('svg'), e, 'dex'+zi);
-      cell.onclick = () => openDetail(zi);
-      // 1.2：カード右上の「▶」でその子の声。値が揃わない古い記録は Voice.play 内でその干支の標準の声に落ちる
-      cell.querySelector('.dex-voice').addEventListener('click', ev => { ev.stopPropagation(); Voice.play(e); });
+      cell.onclick = () => openDetail(zi);   // 1.2 の「▶」は 2026-11-10 に友だち一覧から外し、帳面「きょうの音」の行へ移した
     } else {
       cell.className = 'dex-cell empty';   // 空きは無地の枠のみ（干支名・文言なし）
     }
